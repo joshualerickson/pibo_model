@@ -1,0 +1,495 @@
+---
+title: "Water Yield"
+author: "Josh Erickson"
+date: "10/22/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(latex2exp)
+knitr::opts_chunk$set(dev.args = list(png = list(type = "cairo")),fig.width = 10, fig.height = 5,
+                      warning = FALSE, message = FALSE, error = FALSE)
+library(patchwork)
+library(tidyverse)
+library(GGally)
+library(ggtext)
+library(sasLM)
+library(janitor)
+library(car)
+library(broom)
+library(ggpubr)
+library(rstatix)
+
+gr_95 <- read_csv('R1WestPIBO102621.csv') %>% na.omit() %>% clean_names()
+
+set.seed(13466)
+gr_95m <- slice_sample(gr_95 %>% filter(mgmt == 'Managed'), n = 122)
+
+gr_95 <- rbind(gr_95m, gr_95 %>% filter(mgmt == 'Reference'))
+gr_95 <- gr_95 %>%  mutate(mean_bf_bc = bcPower(mean_bf, 0.42),
+                           mean_wd_tran_bc = bcPower(mean_wd_tran, 0.42),
+                           mean_bank_an_bc = bcPower(mean_bank_an, 15.42),
+                           mean_stab_bc = bcPower(mean_stab, 5.42),
+                           shed_round = round(shed_areakm2, 0),
+                           shed_area_floor = (shed_round-shed_round %% 10),
+                           shed_area_floor_50 = (shed_round-shed_round %% 50),
+                           shed_bc = bcPower(shed_areakm2, 0.42),
+                           precip_bc = bcPower(ave_annual_precip, 15.42))
+
+thematic::thematic_on(font = 'Montserrat')
+
+t_wd_tran <- t.test(mean_wd_tran_bc~mgmt, data = gr_95 %>% filter(!is.na(mean_wd_tran), !is.na(mgmt)))
+t_mean_bf <- t.test(mean_bf_bc~mgmt, data = gr_95 %>% filter(!is.na(mean_bf), !is.na(mgmt)))
+t_mean_bank_an<-t.test(mean_bank_an ~mgmt, data = gr_95 %>% filter(!is.na(mean_bank_an), !is.na(mgmt)))
+t_mean_stab <- t.test(mean_stab ~mgmt, data = gr_95 %>% filter(!is.na(mean_stab), !is.na(mgmt)))
+
+p <- c(t_wd_tran$p.value,t_mean_bf$p.value, t_mean_bank_an$p.value,t_mean_stab$p.value)
+
+p_adjust <- round(p.adjust(p, "BH"), 3)
+```
+
+## Intro
+
+This is an statistical look into the water yield data frame and the analysis framework. The analysis follows these steps below;
+
+Tier 1 Analysis: Test for differences in bankfull width, width/depth ratio, bank angle, and bank stability in reference and managed sites. Determine the if differences are positive or negative. If no statistical difference is found in any of the three dependent variables, stop.
+
+Tier 2 Analysis: Continue with Tier 2 analysis if Tier 1 analysis determines statistically different results in the dependent variable(s) between reference and managed catchments. Use Pearson's Product Moment Correlation analysis to explore any relationships between the dependent variables and independent management variables (Table 1). Use Generalized Linear Mixed Models and Generalized Linear Models (PROC GLM) to evaluate associations between the management variables and the dependent variables (Table 1). Use Akaike's Information Criterion (AIC) to rank the competing models relative to the one with the lowest score. Test for any significant relationships between independent management variables and the dependent variables.
+
+I'll go through each step of the tiers by looking at results, visualations and interpretations.
+
+## Tier 1
+
+In the Tier 1 analysis we'll want to look and see if any of the dependant variables are different between groups (Managed vs Reference). To do this we'd normally look at this by using a simple two-sided t-test; however, I'd like to discuss the idea of iid (independent and identically distributed) and some other assumptions before moving on. To be able to use a t-test the data needs to follow the assumptions below;
+
+1.  iid
+2.  response follows a normal distribution
+3.  variance is homogeneous between groups
+4.  balanced data
+
+We can make 2 work by a transformation (box-cox) and 3 will most likely be fine (I've looked already) as well as downsample to managed; however, the iid assumption I believe doesn't work and we would need to consider another test. This is where ANCOVA or GLM comes into play as we can now account for that iid problem with covariates (we still need to follow other assumptions as well!). If you're wondering 'why can't we just account for that in the intial data?', you're absolutely right! We could account for this in the experimental design (i.e. only select observations from both groups with the same drainage area, precip, and whatever other confounding factors we might know about) but it's a lot easier to adjust for this by controlling those variables using ANCOVA or GLM. So below, I'll just show some graphs of the two groups and dependent variables in the guise of what it would look like if we ignored iid assumptions.
+
+```{r, echo=FALSE, message=F, warning=F}
+### plotting
+
+p1 <- ggplot(gr_95, aes(x = mgmt, y = mean_stab)) + 
+  ggdist::stat_halfeye(
+    adjust = .5, 
+    width = .6, 
+    .width = 0, 
+    justification = -.3, 
+    point_colour = NA, aes(fill = mgmt)) + 
+  geom_boxplot(
+    width = .25, show.legend = F,
+    outlier.shape = NA, size = 1,
+    aes(color = mgmt)
+  ) +
+  geom_point(
+    size = 0.5,
+    alpha = .43, 
+    position = position_jitter(
+      seed = 1, width = .1
+    ), aes(color = mgmt)
+  )  + labs(subtitle = paste0('Mean Bank Stability<br>**p-value = ', p_adjust[4], '**'),
+                    y = 'Mean Bank Stability (%)', x = '')+
+  cowplot::theme_minimal_hgrid(12, rel_small = 1)+
+  theme(
+    plot.subtitle = element_markdown(),
+    legend.position = 'none')
+
+p2 <- ggplot(gr_95, aes(x = mgmt, y = mean_bf)) + 
+  ggdist::stat_halfeye(
+    adjust = .5, 
+    width = .6, 
+    .width = 0, 
+    justification = -.3, 
+    point_colour = NA, aes(fill = mgmt)) + 
+  geom_boxplot(
+    width = .25, show.legend = F,
+    outlier.shape = NA, size = 1,
+    aes(color = mgmt)
+  ) +
+  geom_point(
+    size = 0.5,
+    alpha = .43,
+    position = position_jitter(
+      seed = 1, width = .1
+    ), aes(color = mgmt)
+  ) +labs(subtitle = paste0('Mean Bankfull Width<br>**p-value = ', p_adjust[2],'**'),
+                    y = 'Mean Bankfull Width (m)', x = '')+
+  cowplot::theme_minimal_hgrid(12, rel_small = 1)+
+  theme(
+    plot.subtitle = element_markdown(),
+    legend.position = 'none')
+
+p3 <- ggplot(gr_95, aes(x = mgmt, y = mean_wd_tran)) + 
+  ggdist::stat_halfeye(
+    adjust = .5, 
+    width = .6, 
+    .width = 0, 
+    justification = -.3, 
+    point_colour = NA, aes(fill = mgmt)) + 
+  geom_boxplot(
+    width = .25, show.legend = F,
+    outlier.shape = NA, size = 1,
+    aes(color = mgmt)
+  ) +
+  geom_point(
+    size = 0.5,
+    alpha = .43,
+    position = position_jitter(
+      seed = 1, width = .1
+    ), aes(color = mgmt)
+  ) + labs(subtitle = paste0('Mean Width to Depth (WD) at Transects<br>**p-value = ', p_adjust[1], '**'), y = 'Mean WD (ratio)', x = '')+
+  cowplot::theme_minimal_hgrid(12, rel_small = 1)+
+  theme(
+    plot.subtitle = element_markdown(),
+    legend.position = 'none')
+
+p4 <- ggplot(gr_95, aes(x = mgmt, y = mean_bank_an)) + 
+  ggdist::stat_halfeye(
+    adjust = .5, 
+    width = .6, 
+    .width = 0, 
+    justification = -.3, 
+    point_colour = NA, aes(fill = mgmt)) + 
+  geom_boxplot(
+    width = .25, show.legend = F,
+    outlier.shape = NA, size = 1,
+    aes(color = mgmt)
+  ) +
+  geom_point(
+    size = 0.5,
+    alpha = .43,
+    position = position_jitter(
+      seed = 1, width = .1
+    ), aes(color = mgmt)
+  ) + labs(subtitle = paste0('Mean Bank Angle <br>**p-value =', p_adjust[3], '**'),
+                    y = 'Mean Bank Angle (%)', x = '')+
+  cowplot::theme_minimal_hgrid(12, rel_small = 1) +
+  theme(
+    plot.subtitle = element_markdown(),
+    legend.position = 'none')
+
+(p1|p2)/(p3|p4) +
+plot_annotation(
+  title = 'Multiple Comparison p value results (Benjamini & Hochberg (1995))',
+  subtitle = 'n = 244 (122 samples per group) \nbox-cox transformations used for Mean Bankfull Width and Mean WD (ratio)',
+  caption = paste('Disclaimer: assuming iid')
+)
+
+
+```
+
+As you can see from the graphs above, the mean bankfull width dependent variable has the most separation of means; however, remember we really can't say anything about this because we are not following iid assumptions. We need to move on to some more flexible models like ANCOVA/GLM. The reason why I'm saying "ANCOVA/GLM" is that they're essentially the same when the link function is gaussian aka normal and covariates are linear. To use ANCOVA we'll need to pass some assumption so that we can use it. This is where we move into Tier 2. I'd propose removing Tier 1 because of the iid assumption not being met and just go with Tier 2. From there, we can talk about GLMM and whether or not we'd want to do that analysis or whether or not we want to compare models?
+
+## Tier 2
+
+In Tier 2 we'll look into the initial hypothesis,
+
+"Hypothesis: Change in water yield and/or peak flows associated with timber harvest and the presence of roads affect bankfull dimensions, bank angle, and/or bank stability in susceptible channels."
+
+-   curious if ***susceptible*** is a attribute of the selected sites?
+
+To do this we need to see if there is a difference between our selected dependent variables (Mean Bankfull Width, Mean W/D, Mean Bank Angle, Mean Bank Stability) and groups (Managed vs Reference). In the section above we talked about how iid assumptions were not met or controlled for so we'll need to control for those in this analysis by looking for strong correlations between the dependent and independent variable aka covariate. So let's look at some correlations using a linear regression and Pearson Correlation.
+
+### Looking for Covariates
+
+First we'll look to see if there are any covariates with Mean Bankfull Width that we'd want to use. When looking at these plots we really only want to look down column 1 and across row 1.
+
+<center>
+
+**Mean Bankfull Width**
+
+</center>
+
+```{r, echo=FALSE}
+
+ggpairs(gr_95 %>% select(mean_bf,mgmt, drain_density:mtbs_high_sev_km2, "shed_areakm2", "pct_mtbs_mod", "pct_mtbs_high", "pct_nfs"),
+        mapping = aes(color = mgmt), columns = c(1, 3:12), upper = list(continuous = wrap("cor", size = 2)),
+        lower = list(continuous = wrap("smooth", method = "lm", se = F,
+                                               alpha = 0.6)))
+
+```
+
+We notice that `shed_areakm2` and `ave_annual_precip` stand out as strongly correlated with the dependant variable as well as parrallel slopes between groups (this is important for using a covariate).
+
+<center>
+
+**Mean W/D**
+
+</center>
+
+```{r, echo=FALSE}
+
+ggpairs(gr_95 %>% select(mean_wd_tran,mgmt, drain_density:mtbs_high_sev_km2, "shed_areakm2", "pct_mtbs_mod", "pct_mtbs_high", "pct_nfs"),
+        mapping = aes(color = mgmt), columns = c(1, 3:12), upper = list(continuous = wrap("cor", size = 2)),
+        lower = list(continuous = wrap("smooth", method = "lm", se = F,
+                                               alpha = 0.6)))
+
+```
+
+Same thing again for for Mean W/D.
+
+<center>
+
+**Mean Bank Angle**
+
+</center>
+
+```{r, echo=FALSE}
+
+ggpairs(gr_95 %>% select(mean_bank_an,mgmt, drain_density:mtbs_high_sev_km2, "shed_areakm2", "pct_mtbs_mod", "pct_mtbs_high", "pct_nfs"),
+        mapping = aes(color = mgmt), columns = c(1, 3:12), upper = list(continuous = wrap("cor", size = 2)),
+        lower = list(continuous = wrap("smooth", method = "lm", se = F,
+                                               alpha = 0.6)))
+
+```
+
+Here `shed_areakm2` is really the only covariate.
+
+<center>
+
+**Mean Bank Stability**
+
+</center>
+
+```{r, echo=FALSE}
+
+ggpairs(gr_95 %>% select(mean_stab,mgmt, drain_density:mtbs_high_sev_km2, "shed_areakm2", "pct_mtbs_mod", "pct_mtbs_high", "pct_nfs"),
+        mapping = aes(color = mgmt), columns = c(1, 3:12), upper = list(continuous = wrap("cor", size = 2)),
+        lower = list(continuous = wrap("smooth", method = "lm", se = F,
+                                               alpha = 0.6)))
+
+```
+
+I'd say we don't have any for Mean Bank Stability, which makes sense right? That is to say, bank angle and stability are independent of other variables.
+
+So from the analysis above I'd use these variables (table below) for each dependent variable.
+
+|  Mean Bankfull Width  |       Mean W/D        | Mean Bank Angle | Mean Bank Stability |
+|:---------------------:|:---------------------:|:---------------:|:-------------------:|
+| precip/watershed area | precip/watershed area | watershed area  |        none         |  
+
+
+## Assumptions  
+
+Now that we've got our covariates we can start to modelling process. But first, lets lay out the assumptions and start checking them off one by one.  
+
+1.  Covariate and group/treatment are independent  
+2.  Homogeneity of variance  
+3.  Homogeneity of covariate regression coefficients; parallel lines between groups  
+
+### Independance  
+
+So let's talk about the independence of the covariate and the groups. Are any of these data collocated? For example, is there a site at point A and then another close site downstream at point B? If so, we would need to account for this by taking one of those observations out (this could be controlled for with a mixed model (GLMM) but GLMM are fairly complex beasts, and you should not open that can of worms unless you are sure your analyses need it. I'm not sure we need to go that far for a few points; however, if there is a significant amount of collocating observations I'd suggest a mixed model). We can also check with a F-test between the group and the covariate.  
+
+### Homogeneity of variance  
+
+We need to check and see if the variance of the groups is equal or not. To do this we can use the Levene Test.
+
+```{r, echo=FALSE, message=F, warning=F}
+lt_mean_bf <- leveneTest(mean_bf_bc ~ mgmt, data = gr_95) %>% 
+  broom::tidy() %>% 
+  mutate(DV = 'Mean Bankfull Width') %>% 
+  select(DV, p.value)
+lt_mean_wd <- leveneTest(mean_wd_tran_bc ~ mgmt, data = gr_95) %>% 
+  broom::tidy() %>% 
+  mutate(DV = 'Mean WD') %>% 
+  select(DV, p.value)
+lt_mean_an <- leveneTest(mean_bank_an ~ mgmt, data = gr_95) %>% 
+  broom::tidy() %>% 
+  mutate(DV = 'Mean Bank Angle') %>% 
+  select(DV, p.value)
+lt_mean_stab <- leveneTest(mean_stab ~ mgmt, data = gr_95) %>% 
+  broom::tidy() %>% 
+  mutate(DV = 'Mean Bank Stability') %>% 
+  select(DV, p.value)
+
+lt_mean_bf %>% 
+  bind_rows(lt_mean_wd) %>% 
+  bind_rows(lt_mean_an) %>% 
+  bind_rows(lt_mean_stab) %>% 
+  kableExtra::kable() %>% 
+  kableExtra::kable_styling()
+
+```
+
+With a transformation we can get Mean Bank Angle to have equal variances.  
+
+```{r}
+leveneTest(mean_bank_an_bc ~ mgmt, data = gr_95) %>% 
+  broom::tidy() %>% 
+  mutate(DV = 'Mean Bank Angle') %>% 
+  select(DV, p.value)
+```
+
+### Parallel Lines
+
+Now we need to check and see if our covariate (watershed area) is homogeneous between groups. This is necessary for ANCOVA because we don't want any interaction between the dependent variable in one group being different in the other. Our goal is to control for the 'supposed' covariate and this makes sure we are not misleading. 
+
+Let's plot. Remember we only need to do this for 3 of the dependant variables.
+
+```{r, echo = F}
+
+p1 <- ggscatter(
+  gr_95, x = "shed_areakm2", y = "mean_bf",
+  color = "mgmt", add = "reg.line"
+  )+
+  stat_regline_equation(
+    aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~"), color = mgmt)
+    )+
+  cowplot::theme_minimal_hgrid(12, rel_small = 1)+
+  labs(y = 'Mean Bankfull Width (ft)', 
+       x = 'Watershed Area (km2)',
+       color = 'Group') +
+  theme(
+    plot.subtitle = element_markdown())
+p2 <- ggscatter(
+  gr_95, x = "shed_areakm2", y = "mean_wd_tran",
+  color = "mgmt", add = "reg.line"
+  )+
+  stat_regline_equation(
+    aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~"), color = mgmt)
+    )+
+  cowplot::theme_minimal_hgrid(12, rel_small = 1)+
+  labs(y = 'Mean W/D (ft)', 
+       x = 'Watershed Area (km2)',
+       color = 'Group') +
+  theme(
+    plot.subtitle = element_markdown(),
+    legend.position = 'none')
+p3 <- ggscatter(
+  gr_95, x = "shed_areakm2", y = "mean_bank_an_bc",
+  color = "mgmt", add = "reg.line"
+  )+
+  stat_regline_equation(
+    aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~"), color = mgmt)
+    )+
+  cowplot::theme_minimal_hgrid(12, rel_small = 1)+
+  labs(y = 'Mean Bank Angle', 
+       x = 'Watershed Area (km2)',
+       color = 'Group') +
+  theme(
+    plot.subtitle = element_markdown(),
+    legend.position = 'none')
+
+(p1|p2|p3) + plot_layout(guides = 'collect') +
+plot_annotation(
+  title = 'Homogeneity of covariate regression coefficients',
+  caption = paste('Disclaimer: assuming iid') 
+)
+
+
+p1 <- ggscatter(
+  gr_95, x = "precip_bc", y = "mean_bf_bc",
+  color = "mgmt", add = "reg.line"
+  )+
+  stat_regline_equation(
+    aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~"), color = mgmt)
+    )+
+  cowplot::theme_minimal_hgrid(12, rel_small = 1)+
+  labs(y = 'Mean Bankfull Width (ft)', 
+       x = 'Average Annual Precip',
+       color = 'Group') +
+  theme(
+    plot.subtitle = element_markdown())
+p2 <- ggscatter(
+  gr_95, x = "ave_annual_precip", y = "mean_wd_tran",
+  color = "mgmt", add = "reg.line"
+  )+
+  stat_regline_equation(
+    aes(label =  paste(..eq.label.., ..rr.label.., sep = "~~~~"), color = mgmt)
+    )+
+  cowplot::theme_minimal_hgrid(12, rel_small = 1)+
+  labs(y = 'Mean W/D (ft)', 
+       x = 'Average Annual Precip',
+       color = 'Group') +
+  theme(
+    plot.subtitle = element_markdown(),
+    legend.position = 'none')
+
+(p1|p2) +plot_layout(guides = 'collect') +
+plot_annotation(
+  title = 'Homogeneity of covariate regression coefficients',
+  caption = paste('Disclaimer: assuming iid') 
+)
+```
+
+I'm thinking we just take out the covariate with Mean Bank Angle.  
+
+## Results  
+
+Ok, now we can start to actually model! This is where we'll use ANCOVA for Mean Bankfull Width and Mean W/D but use t-tests for the other two dependent variables.  
+
+<center>
+**Mean Bankfull Width with Precipitation**
+</center>  
+
+```{r}
+
+sasLM::GLM(mean_bf_bc~shed_areakm2+precip_bc+mgmt,
+           gr_95)
+```
+
+<center>
+**Mean Bankfull Width with Without Precipitation**
+</center>  
+
+```{r}
+
+sasLM::GLM(mean_bf_bc~shed_areakm2+mgmt,
+           gr_95)
+```
+
+<center>
+**Mean W/D**
+</center>  
+```{r}
+sasLM::GLM(mean_wd_tran_bc~shed_areakm2+mgmt,
+           gr_95)
+```
+
+<center>
+**Mean Bank Angle**
+</center>  
+
+```{r}
+t.test(mean_bank_an ~mgmt, data = gr_95)
+
+```
+<center>
+**Mean Bank Stability**
+</center>  
+```{r}
+t.test(mean_stab ~mgmt, data = gr_95)
+
+```
+
+
+
+```{r}
+mean_grad, mean_pool_dp, mean_pool_fr, mean_d50, mean_pt_fine
+
+gr_95 %>% filter(mean_pt_fine > 0, mean_d50 > 0,mean_grad <= 2) %>% ggplot(aes(mean_bf_bc, sqrt(shed_areakm2), color = mgmt)) +
+  geom_point() +
+  geom_smooth(method = 'lm', se = F)
+
+sasLM::GLM(mean_bf_bc~shed_areakm2+log(mean_pool_dp)+log(mean_pool_fr)+mgmt,gr_95 %>% filter(mean_pt_fine > 0, mean_d50 > 0,mean_grad <= 2))
+
+sasLM::GLM(mean_wd_tran_bc~shed_areakm2+precip_bc+mean_pool_dp+mean_pool_fr+mean_pt_fine_log+mgmt,gr_95 %>% filter(mean_pt_fine > 0) %>%  mutate(mean_pt_fine_log = log(mean_pt_fine)))
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+

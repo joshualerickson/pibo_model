@@ -1,0 +1,381 @@
+---
+title: "plotting"
+author: "Josh Erickson"
+date: "11/20/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(latex2exp)
+knitr::opts_chunk$set(dev.args = list(png = list(type = "cairo")),fig.width = 10, fig.height = 5,
+                      warning = FALSE, message = FALSE, error = FALSE)
+
+#can change font to whatever, i like Montserrat
+thematic::thematic_on(font = 'Montserrat')
+
+# makes the plots sharper
+resourceviz::cairo_view()
+
+library(patchwork)
+library(tidyverse)
+library(GGally)
+library(ggtext)
+library(sasLM)
+library(janitor)
+library(car)
+library(broom)
+library(ggpubr)
+library(rstatix)
+library(readxl)
+library(sf)
+
+
+gr_95_new <- read_xlsx('R1WestPIBO110521.xlsx') %>% 
+  clean_names()
+
+gr_95 <- read_csv('SummaryStatsKendall_gr_95.csv')[,1:36] %>% 
+  na.omit() %>%
+  clean_names() %>% 
+  right_join(gr_95_new %>% select(site_id), by = 'site_id') %>%
+  mutate(precip_cut = cut_interval(ave_annual_precip,n=6),
+         shed_cut = cut_interval(shed_areakm2, n = 6),
+         mgmt = factor(mgmt))
+
+source('utils.R')
+
+```
+
+Plotting the amount of harvest (in hectares) over time. 
+
+```{r}
+harvest_ts <- read_tsv('C:/Users/joshualerickson/Box/PIBO and Water Yield/Data/R1AnnualHarvestHectares110521.txt')
+
+
+harvest_ts %>% 
+  pivot_longer(-1) %>% 
+  mutate(name = str_remove_all(name, ' \\(ha\\)'),
+         name = factor(name, levels = c('Regeneration',
+                                        'Intermediate',
+                                        'Salvage'))) %>% 
+  ggplot(aes(Year, value, color = name)) +
+  geom_line(size = 1, alpha = 0.75)+
+  scale_y_continuous(labels = scales::comma, breaks = seq(0,30000,5000))+
+  scale_color_manual(values = c("#F21A00","#EBCC2A","#3B9AB2")) +
+  labs(y = 'Harvest (ha)', color = 'Type of Harvest',
+       title = 'Harvest Amount (ha) over Time in Region 1') +
+  custom_theme(font_size = 12)
+  
+```
+
+
+CDF's (Cumulative Distribution Functions).
+
+```{r}
+
+
+g1 <- gr_95 %>% 
+  rename(`High Harvest` = 'pct_high_harv_int',`Moderate Harvest` = 'pct_mod_harv_int') %>% 
+  pivot_longer(c(`High Harvest`, `Moderate Harvest`)) %>% 
+  ggplot(aes(value, color = mgmt)) + 
+  stat_ecdf(key_glyph = 'path', geom= 'step') +
+  labs(x = 'Percentage of Harvest (x<sub>i</sub>)',
+       y = 'f<sub>x</sub>(x<sub>i</sub>)',
+       color = '')+
+  custom_theme(font_size = 12)
+
+
+g2 <- gr_95 %>%
+  rename(`High Fire` = 'pct_mtbs_high',`Moderate Fire` = 'pct_mtbs_mod') %>% 
+  pivot_longer(c(`High Fire`, `Moderate Fire`)) %>% 
+  ggplot(aes(value, color = mgmt)) + 
+  stat_ecdf(key_glyph = 'path', geom= 'step') +
+  labs(x = 'Percentage of Fire (x<sub>i</sub>)',
+       y = '',
+       color = '') +
+  custom_theme(font_size = 12)
+
+g3 <- gr_95 %>% 
+  ggplot(aes(road_dens_km2)) + 
+  stat_ecdf(aes(color = mgmt)) +
+  labs(x = 'Road Density (x<sub>i</sub>)',
+       y = '',
+       color = '') +
+  custom_theme(font_size = 12)
+
+library(patchwork)
+
+(g1|g2|g3) + plot_layout(guides = 'collect') 
+
+g1
+g2
+g3
+gr_95 %>% 
+  rename(`High Harvest` = 'pct_high_harv_int',`Moderate Harvest` = 'pct_mod_harv_int') %>% 
+  pivot_longer(c(`High Harvest`, `Moderate Harvest`)) %>% 
+  ggplot(aes(value, color = mgmt)) + 
+  geom_density(key_glyph = 'path', fill = NA) +
+  labs(x = 'Percentage of Harvest (x<sub>i</sub>)',
+       y = 'density',
+       color = 'Harvest Scale',
+       title = 'Probability Distribution Function (PDF)',
+       subtitle = 'only for Managed locations')+
+  custom_theme(font_size = 12)
+```
+
+
+Comparing all harvest, all fire and road density with normalized bankfull width.
+
+```{r}
+library(sf)
+pibo_sites <- read_sf('pibo_sites.gpkg', 'pibo_sites')
+
+
+#harvest
+resourceviz::cairo_view()
+  ggplot() +
+  geom_point(data = pibo_sites %>% filter(all_harvest < 10), aes(shed_areakm2, normalize_bf, size = ''), alpha = 0.25, shape = 21, color = 'black')+
+    guides(size = guide_legend(override.aes = list(alpha = 1)))+
+  ggnewscale::new_scale_color()+
+  geom_point(data = pibo_sites %>% filter(all_harvest >= 10),
+             aes(shed_areakm2, normalize_bf, color = all_harvest),size = 2)+ scale_color_gradientn(colors = wesanderson::wes_palette('Zissou1'))   +
+  #scale_x_log10() +
+  custom_theme(font_size = 12, em = FALSE) +
+  labs(x = 'Watershed Area km<sup>2</sup>',
+       y = 'Mean Bankfull Width/AAP',
+       color = 'Harvest Area >= 10%',
+       size = 'Harvest Area < 10%',
+       title = 'Comparing Harvest Area by Watershed Area and Normalized Bankfull',
+       subtitle =  expression(paste("normalized bankfull =  ", frac('mean bankfull width (m)', 'average annual precipitation (m)'))))
+ 
+  # fire 
+    ggplot() +
+  geom_point(data = pibo_sites %>% filter(all_fire < 10), aes(shed_areakm2, normalize_bf, size = ''), alpha = 0.25, shape = 21, color = 'black')+
+    guides(size = guide_legend(override.aes = list(alpha = 1)))+
+  ggnewscale::new_scale_color()+
+  geom_point(data = pibo_sites %>% filter(all_fire >= 10),
+             aes(shed_areakm2, normalize_bf, color = all_fire),size = 2)+ scale_color_gradientn(colors = wesanderson::wes_palette('Zissou1'))   +
+  #scale_x_log10() +
+  custom_theme(font_size = 12, em = FALSE) +
+  labs(x = 'Watershed Area km<sup>2</sup>',
+       y = 'Mean Bankfull Width/AAP',
+       color = 'Fire Area >= 10%',
+       size = 'Fire Area < 10%',
+       title = 'Comparing Fire Area by Watershed Area and Normalized Bankfull',
+       subtitle =  expression(paste("normalized bankfull =  ", frac('mean bankfull width (m)', 'average annual precipitation (m)'))))
+    
+      # road density 
+  ggplot() +
+  geom_point(data = pibo_sites %>% filter(road_dens_km2 < 2.59), aes(shed_areakm2, normalize_bf, size = ''), alpha = 0.25, shape = 21, color = 'black')+
+    guides(size = guide_legend(override.aes = list(alpha = 1)))+
+  ggnewscale::new_scale_color()+
+  geom_point(data = pibo_sites %>% filter(road_dens_km2 >= 2.59),
+             aes(shed_areakm2, normalize_bf, color = road_dens_km2),size = 2)+ scale_color_gradientn(colors = wesanderson::wes_palette('Zissou1'))   +
+  #scale_x_log10() +
+  custom_theme(font_size = 12, em = FALSE) +
+  labs(x = 'Watershed Area km<sup>2</sup>',
+       y = 'Mean Bankfull Width/AAP',
+       color = 'RD Density >= 2.59 km<sup>2</sup>',
+       size = 'RD Density < 2.59 km<sup>2</sup>',
+       title = 'Comparing Road Density (km<sup>2</sup>) by Watershed Area and Normalized Bankfull',
+       subtitle =  expression(paste("normalized bankfull =  ", frac('mean bankfull width (m)', 'average annual precipitation (m)'))),
+       caption = '2.59 km<sup>2</sup> = 1 sq.mi')
+
+```
+
+Comparing ecoregions
+
+```{r}
+#harvest
+pibo_sites %>% 
+  mutate(harv_group = ifelse(all_harvest >= 10, 'Greater Than 10%',
+                                          'Less Than 10%')) %>% 
+  ggplot(aes(shed_areakm2, normalize_bf, color = all_harvest)) +
+  geom_point(size = 1.5) + 
+  geom_smooth(aes(group = harv_group, linetype = harv_group),
+              color = 'black',
+              se = F, method = 'lm', size = 0.5) +
+  scale_color_gradientn(colors = wesanderson::wes_palette('Zissou1'))   +
+  scale_x_log10() +
+  custom_theme(font_size = 12) +
+  labs(x = 'Watershed Area km<sup>2</sup>',
+       y = 'Mean Bankfull Width/AAP',
+       color = 'Harvest Area >= 10%',
+       linetype = '') +
+  facet_wrap(~MAP_UNIT_N) 
+
+#fire
+pibo_sites %>% mutate(fire_group = ifelse(all_fire >= 10, 'Greater Than 10%',
+                                          'Less Than 10%')) %>% 
+  ggplot(aes(shed_areakm2, normalize_bf, color = all_fire)) +
+  geom_point(size = 1)+ 
+  geom_smooth(aes(group = fire_group, linetype = fire_group),
+              color = 'black',
+              se = F, method = 'lm', size = 0.5) +
+  scale_color_gradientn(colors = wesanderson::wes_palette('Zissou1'))   +
+  scale_x_log10() +
+  custom_theme(font_size = 12) +
+  labs(x = 'Watershed Area km<sup>2</sup>',
+       y = 'Mean Bankfull Width/AAP',
+       color = 'Fire Area >= 10%',
+       linetype = '') +
+  facet_wrap(~MAP_UNIT_N) 
+
+#roads
+pibo_sites %>% mutate(rd_group = ifelse(road_dens_km2 >= 0.5, 'Greater Than 0.5',
+                                          'Less Than 0.5')) %>% 
+  ggplot(aes(shed_areakm2, normalize_bf, color = road_dens_km2)) +
+  geom_point(size = 1) + 
+  geom_smooth(aes(group = rd_group, linetype = rd_group),
+              color = 'black',
+              se = F, method = 'lm', size = 0.5) +
+  scale_color_gradientn(colors = wesanderson::wes_palette('Zissou1')) +
+  scale_x_log10() +
+  custom_theme(font_size = 12) +
+  labs(x = 'Road Density km<sup>2</sup>',
+       y = 'Mean Bankfull Width/AAP',
+       color = 'Road Density >= 0.5',
+       linetype = '') +
+  facet_wrap(~MAP_UNIT_N) 
+
+#managed vs reference
+
+pibo_sites %>% 
+  mutate(rd_group = ifelse(road_dens_km2 >= 0.5, 'Greater Than 0.5',
+                                          'Less Than 0.5')) %>% 
+  ggplot(aes(shed_areakm2, normalize_bf, color = mgmt)) +
+  geom_point(size = 1) + 
+  geom_smooth(aes(group = mgmt, linetype = mgmt),
+              color = 'black',
+              se = F, method = 'lm', size = 0.5) +
+  scale_x_log10() +
+  custom_theme(font_size = 12) +
+  labs(x = 'Watershed Area km<sup>2</sup>',
+       y = 'Mean Bankfull Width/AAP',
+       color = 'Group',
+       linetype = '') +
+  facet_wrap(~MAP_UNIT_N) 
+
+```
+
+Spatial graphs
+
+```{r}
+mod <- lm(normalize_bf ~ log(shed_areakm2)+mgmt, data = pibo_sites)
+mod <- lm(mean_bf ~ log(shed_areakm2)+log(ave_annual_precip)+mgmt, data = pibo_sites)
+mod2 <- lm(mean_bf ~ log(shed_areakm2)+log(ave_annual_precip), data = pibo_sites)
+summary(mod)
+
+pibo_sites$residuals <- mod$residuals
+
+mt <- AOI::aoi_get(state = "MT")
+id <- AOI::aoi_get(state = "ID")
+mt_id <- bind_rows(mt, id)
+
+m <-ggplot() + 
+  geom_sf(data = mt_id, fill = NA, alpha = 0) + 
+  geom_sf(data = pibo_sites, aes(color = residuals), size = 1.75)+
+  scale_color_gradientn(colors = wesanderson::wes_palette('Zissou1')) +
+  theme_void(base_size = 16) + coord_sf(xlim = c(-117,-112), ylim = c(49.1, 45)) +labs(color = 'Residuals',                                                                       title = 'Maps showing model residuals for Y = 	&beta;<sub>0</sub> + 	&beta;<sub>1</sub>*Precipitation (mm) + &beta;<sub>2</sub>*Watershed Area (km<sup>2</sup>) + &beta;<sub>3</sub>*Group<br>') +facet_wrap(~mgmt) +
+  theme(plot.title = element_markdown(size = 12))
+m
+library(tmap)
+tm_shape(mt_id)+
+  tm_polygons(col = 'white')+
+  tm_shape(pibo_sites)+
+  tm_dots('residuals', size = .5, breaks = c(-10,-5, -2, 0, 2, 5,10),
+          palette = c("#3B99B1", "#65B59A" ,"#B6C68F", "#E9B31F", "#E78100", "#F5191C"))+
+  tm_facets(by='MAP_UNIT_N')
+
+
+
+```
+
+
+Predicting Mean bankfull width with PRISM and DEM.
+
+```{r}
+library(vapour)
+library(gdalio)
+library(sf)
+prism <- 'D:/R_folder/Rasters/common/PRISM.tif'
+cpg <- 'D:/R_folder/Rasters/common/US_Precip_1981-2010_CPG_all.tif'
+cpg <- raster::raster(cpg)
+ext <- raster::extent(aoi_ext)
+cpg_crop <- raster::crop(cpg, ext)
+ri <- vapour::vapour_raster_info(cpg)
+aoi <- mapedit::drawFeatures()
+aoi <- aoi %>% st_transform(crs = ri$projstring)
+
+aoi_bbox <- function(aoi){
+  aoi_bbox <- st_bbox(aoi)
+  extent <- c(aoi_bbox[[1]], aoi_bbox[[3]], aoi_bbox[[2]], aoi_bbox[[4]])
+}
+
+aoi_ext <- aoi_bbox(aoi)
+
+grid0 <- gdalio_set_default_grid(list(extent = aoi_ext,
+                                      dimension = c(15000,15000),
+                                      projection = ri$projection))
+
+gdalio_set_default_grid(grid0)
+
+gdalio_raster <- function(dsn,...){
+  v <- gdalio_data(dsn,...)
+g <- gdalio_get_default_grid()
+r <- raster::raster(raster::extent(g$extent),
+                    nrows = g$dimension[2],
+                    ncols = g$dimension[1],
+                    crs = g$projection)
+if (length(v) > 1) {
+    r <- raster::brick(replicate(length(v), r, simplify = FALSE))
+  }
+  raster::setValues(r, do.call(cbind, v))
+}
+system('gdalwarp -te -1678616 -1152801 2460148 3091405 D:/R_folder/Rasters/common/US_Precip_1981-2010_CPG_all.tif cpg_raster.tif')
+prism_raster <- gdalio_raster(prism)
+cpg_raster <- gdalio_raster(cpg)
+mapview::mapview(log(cpg_raster)) + mapview::mapview(st_transform(pibo_sites$geom, crs = ri$projection))
+raster::plot(cpg_raster)
+writeRaster(cpg_crop, 'cpg_raster.tif', overwrite = TRUE)
+library(exploreRGEE)
+library(rgee)
+
+ee_Initialize(gcs = TRUE, email = 'joshualerickson@gmail.com')
+
+fa <- get_terrain(aoi = aoi,param = 'FA')
+
+fa_rast <- ee_as_raster(fa$data,
+                        region = fa$geom,
+                        scale = 90,
+                        via = 'gcs',
+                        container = 'jle_rasters')
+mapview::mapview(fa_rast[[1]])
+
+prism_rast_proj <- raster::projectRaster(prism_raster,fa_rast[[1]], res = 90)
+
+mapview::mapview(prism_rast_proj)
+fa_rast_km <- fa_rast[[1]]*9e-5
+stack_rast <- raster::stack(prism_rast_proj, fa_rast_km)
+library(tidyverse)
+mod2 <- lm(mean_bf ~ log(upg)+log(layer), data = pibo_sites %>% mutate(upg = shed_areakm2,
+                                                                       layer = ave_annual_precip))
+summary(mod2)
+
+model_rast <- raster::predict(stack_rast, mod2)
+model_rast <- raster::reclassify(model_rast, c(-Inf,0,NA))
+writeRaster(model_rast, 'model_rast.tif', overwrite= T)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
