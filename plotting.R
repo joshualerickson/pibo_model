@@ -5,7 +5,7 @@ library(GGally)
 library(ggtext)
 library(sasLM)
 library(janitor)
-
+library(resourceviz)
 gr_95_new <- read_csv('R1WestPIBO102621.csv') %>%
   clean_names()
 
@@ -37,7 +37,7 @@ ggplot(gr_95, aes(x = mgmt, y = mean_bf)) +
     point_colour = NA, aes(fill = mgmt)) +
   geom_boxplot(
     width = .25,
-    outlier.shape = NA, size = 2,
+    outlier.shape = NA, size = .75,
     aes(color = mgmt)
   ) +
   geom_point(
@@ -47,9 +47,9 @@ ggplot(gr_95, aes(x = mgmt, y = mean_bf)) +
       seed = 1, width = .1
     ), aes(color = mgmt)
   ) +
-  theme_bw() +
+  custom_theme() +
   coord_cartesian(xlim = c(1.2, NA), clip = "off") +
-  labs(y = 'Mean Bankfull Width (ft)',
+  labs(y = 'Mean Bankfull Width (m)',
        x = 'Type',
        title = 'Raincloud plots of Mean Bankfull Width split by Managed vs. Reference') + theme(legend.position = 'none')
 
