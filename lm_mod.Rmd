@@ -1,0 +1,264 @@
+---
+title: "lmm"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+```{r setup, include=FALSE}
+library(latex2exp)
+knitr::opts_chunk$set(dev.args = list(png = list(type = "cairo")),fig.width = 10, fig.height = 5,
+                      warning = FALSE, message = FALSE, error = FALSE)
+library(patchwork)
+library(tidyverse)
+library(GGally)
+library(ggtext)
+library(sasLM)
+library(janitor)
+library(car)
+library(broom)
+library(ggpubr)
+library(rstatix)
+library(readxl)
+library(sf)
+library(lme4)
+library(resourceviz)
+library(extrafont)
+font_import()
+cairo_view()
+thematic::thematic_on(font = 'Calibri')
+source('utils.R')
+library(jtools)
+library(robustlmm)
+library(lme4)
+
+```
+
+
+
+
+## Linear mixed models  
+
+```{r}
+
+ggplot(gr_95_ts) + 
+  geom_point(aes(yr, bf, group = site_id)) + 
+  stat_smooth(geom = 'line',aes(yr,bf, group = site_id), method = 'lm', se = F, alpha = 0.5, size = 1) +
+  geom_smooth(aes(yr, bf), col = 'red', method = 'lm') +
+  #scale_color_gradientn(colors = hcl.colors('Zissou1', n = 11)) +
+  facet_wrap(~MAP_UNIT_N) +
+  custom_theme() + 
+  labs(x = 'Sample Year', y = 'Bankfull Width (m)')
+
+pibo_sites %>% ggplot() + geom_sf(aes(color = MAP_UNIT_N))
+
+lmm_bf <- lmer(bf ~ log(shed_areakm2) + log(ave_annual_precip) + mgmt + (1 | MAP_UNIT_N/site_name), gr_95_ts)
+summ(lmm_bf, confint = T)
+summary(lmm_bf)
+plot(lmm_bf)
+shapiro.test(residuals(lmm_bf))
+qqPlot(residuals(lmm_bf), col = 'red')
+ggplot() + geom_density(aes(residuals(lmm_bf)))
+
+
+
+ggplot(gr_95_ts %>% filter(mgmt == 'Managed')) + 
+  geom_point(aes(yr, bank_angle, group = site_id)) + 
+  stat_smooth(geom = 'line',aes(yr,bank_angle, group = site_id, color = mgmt), method = 'lm', se = F, alpha = 0.5, size = 1) +
+  geom_smooth(aes(yr, bank_angle), col = 'red', method = 'lm') +
+  #scale_color_gradientn(colors = hcl.colors('Zissou1', n = 11)) +
+  facet_wrap(MAP_UNIT_N~pca_group) +
+  custom_theme() + 
+  labs(x = 'Sample Year', y = 'Bankfull Width (m)')
+
+lmm_ba <- lmer(bank_angle ~ log(shed_areakm2) + log(ave_basin_elev) + mgmt + (1 | MAP_UNIT_N/site_name),gr_95_ts)
+summ(lmm_ba, confint = T)
+plot(lmm_ba)
+shapiro.test(residuals(lmm_ba))
+qqPlot(residuals(lmm_ba), col = 'red')
+ggplot() + geom_density(aes(residuals(rlmm_ba)))
+
+null <- lmer(bank_angle ~ log(shed_areakm2) + log(ave_basin_elev) + mgmt + 1 + (1 | pca_group), data = gr_95)
+icc(null)
+
+rlmm_bf <- rlmer(bf ~ log(shed_areakm2) + log(ave_annual_precip) + mgmt + (1 | MAP_UNIT_N/site_name), gr_95_ts, REML = F)
+summary(rlmm_bf)
+plot(rlmm_bf)
+shapiro.test(residuals(rlmm_bf))
+ggplot() + geom_density(aes(residuals(rlmm_bf)))
+ggplot() + geom_density(aes(residuals(rlmm_bf, 'weighted')))
+
+rsb <- list(psi2propII(smoothPsi, k = 0.5), psi2propII(smoothPsi, k = 2.28))
+rlmm_bf2 <- update(rlmm_bf, rho.sigma.b = rsb)
+rsb <- list(psi2propII(smoothPsi, k = 1), psi2propII(smoothPsi, k = 3))
+rlmm_bf3 <- update(rlmm_bf, rho.sigma.b = rsb)
+compare(rlmm_bf, rlmm_bf2, rlmm_bf3, show.rho.functions = F)
+
+#rlmmr bank angle
+
+rlmm_ba <- rlmer(bank_angle ~ log(shed_areakm2) + log(ave_basin_elev) + mgmt + (1 | MAP_UNIT_N/site_name), gr_95_ts, REML = F)
+summary(rlmm_ba)
+plot(rlmm_ba)
+shapiro.test(residuals(rlmm_ba))
+ggplot() + geom_density(aes(residuals(rlmm_ba)))
+ggplot() + geom_density(aes(residuals(rlmm_ba, 'weighted')))
+
+
+rsb <- list(psi2propII(smoothPsi, k = 0.5), psi2propII(smoothPsi, k = 2.28))
+rlmm_ba2 <- update(rlmm_ba, rho.sigma.b = rsb)
+rsb <- list(psi2propII(smoothPsi, k = 1), psi2propII(smoothPsi, k = 3))
+rlmm_ba3 <- update(rlmm_ba, rho.sigma.b = rsb)
+compare(rlmm_ba, rlmm_ba2, rlmm_ba3, show.rho.functions = F)
+
+coefs <- data.frame(coef(summary(rlmm_bf)))
+
+# get coefficients from robust model to extract t-values
+coefs.robust <- coef(summary(rlmm_bf))
+rownames(coefs.robust) <- NULL
+# calculate p-values based on robust t-values and non-robust approx. DFs
+p.values <- 2*pt(abs(coefs.robust[,3]), abs(coefs$t.value), lower=FALSE)
+p.values
+
+coefs <- data.frame(coef(summary(rlmm_ba)))
+
+# get coefficients from robust model to extract t-values
+coefs.robust <- coef(summary(rlmm_ba))
+rownames(coefs.robust) <- NULL
+# calculate p-values based on robust t-values and non-robust approx. DFs
+p.values <- 2*pt(abs(coefs.robust[,3]), abs(coefs$t.value), lower=FALSE)
+p.values
+```
+
+
+## EMM
+
+```{r}
+library(emmeans)
+
+ba.rg <- ref_grid(lmm_ba, at = list(shed_areakm2 = seq(1, 100, 10)))
+emm_test <- emmeans(ba.rg, specs = c('mgmt', 'shed_areakm2'))
+plot(emm_test, by = 'mgmt') + custom_theme()
+emm <- plot(ba.rg, by = 'mgmt') + custom_theme()
+
+emm_gg <- as.data.frame(emm$data) %>% tibble()
+
+
+p3 <- emm_gg %>% mutate(shed_area = ifelse(mgmt %in% 'Reference', shed_areakm2+2.35, shed_areakm2-2.35)) %>% filter(the.emmean >0) %>% 
+  ggplot() +
+  #geom_point(data = gr_95 , aes(mean_bf, shed_areakm2, color = mgmt), size = 3, alpha = 0.2)+
+  geom_errorbar(aes(the.emmean, shed_areakm2, color=mgmt,xmin = lower.CL, xmax = upper.CL),
+  position = position_dodge2(width = 0.005, padding = 0.005), size = .75) + 
+  custom_theme(font_size = 10) + labs(x = 'Predicted Bank Angle (deg)', 
+                        y = 'Watershed Area km2',
+                        color = "Group",
+                        title = 'Comparing estimated means by Watershed Area (km<sup>2</sup>) (with high residuals)',
+                        subtitle = 'Average annual precipitation is held constant at 1193 (mm)') +
+  geom_point(aes(the.emmean, shed_area), col = 'black', size = 1) 
+p3 
+
+ bf.rg <- ref_grid(lmm_bf, at = list(shed_areakm2 = seq(1, 100, 10)))
+
+emm <- plot(bf.rg, by = 'mgmt') + custom_theme()
+
+emm_gg <- as.data.frame(emm$data) %>% tibble()
+
+
+p3 <- emm_gg %>% mutate(shed_area = ifelse(mgmt %in% 'Reference', shed_areakm2+2.35, shed_areakm2-2.35)) %>% filter(the.emmean >0) %>% 
+  ggplot() +
+  #geom_point(data = gr_95 , aes(mean_bf, shed_areakm2, color = mgmt), size = 3, alpha = 0.2)+
+  geom_errorbar(aes(the.emmean, shed_areakm2, color=mgmt,xmin = lower.CL, xmax = upper.CL),
+  position = position_dodge2(width = 0.005, padding = 0.005), size = .75) + 
+  custom_theme(font_size = 10) + labs(x = 'Predicted Mean Bankfull Width (m)', 
+                        y = 'Watershed Area km2',
+                        color = "Group",
+                        title = 'Comparing estimated means by Watershed Area (km<sup>2</sup>) (with high residuals)',
+                        subtitle = 'Average annual precipitation is held constant at 1193 (mm)') +
+  geom_point(aes(the.emmean, shed_area), col = 'black', size = 1) 
+p3 
+
+
+```
+
+
+
+
+```{r}
+lmm_bf_harv <- lmer(bf ~ log(shed_areakm2) + log(ave_annual_precip) + harv_group + (1 | MAP_UNIT_N/site_name), gr_95_ts %>% filter(mgmt == 'Managed'))
+
+lmm_bf_harv <- rlmer(bf ~ log(shed_areakm2) + log(ave_annual_precip) + harv_group + (1 | MAP_UNIT_N/site_name), gr_95_ts %>% filter(mgmt == 'Managed'))
+
+summ(lmm_bf_harv, confint = T)
+summary(lmm_bf_harv)
+
+
+coefs <- data.frame(coef(summary(lmm_bf_harv)))
+
+# get coefficients from robust model to extract t-values
+coefs.robust <- coef(summary(lmm_bf_harv))
+rownames(coefs.robust) <- NULL
+# calculate p-values based on robust t-values and non-robust approx. DFs
+p.values <- 2*pt(abs(coefs.robust[,3]), abs(coefs$t.value), lower=FALSE)
+round(p.values, 4)
+group_df <- gr_95 %>% filter(mgmt == 'Managed')
+group_df$residuals <- mod_bf_harv$residuals
+
+mod_filt <- lm(mean_bf~log(shed_areakm2) + log(ave_annual_precip) + impact_harvest + MAP_UNIT_N , data = group_df %>% filter(residuals < 5.4))
+summary(mod_filt)
+check_normality(mod_filt)
+mod_bf_harv <- lm(mean_bf~log(shed_areakm2)+log(ave_annual_precip)+harv_group, data = gr_95 %>% filter(mgmt == 'Managed'))
+
+summary(mod_bf_harv)
+gr_95 %>% count(mgmt,harv_group)
+
+
+lmm_bf_harv <- rlmer(bf ~ log(shed_areakm2) + log(ave_annual_precip) + harv_group + (1 | MAP_UNIT_N/site_name), gr_95_ts %>% filter(mgmt == 'Managed'))
+summ(lmm_bf_harv, confint = T)
+qqPlot(residuals(lmm_bf_harv, 'weighted'))
+coefs <- data.frame(coef(summary(lmm_bf_harv)))
+
+# get coefficients from robust model to extract t-values
+coefs.robust <- coef(summary(lmm_bf_harv))
+rownames(coefs.robust) <- NULL
+# calculate p-values based on robust t-values and non-robust approx. DFs
+p.values <- 2*pt(abs(coefs.robust[,3]), abs(coefs$t.value), lower=FALSE)
+round(p.values, 4)
+
+
+
+
+
+
+```
+
+
+
+
+```{r}
+gr_95_ts %>% 
+  filter(mgmt == 'Managed') %>% 
+ggplot() + 
+  geom_point(aes(yr, bf, group = site_id)) + 
+  stat_smooth(geom = 'line',aes(yr,bf, group = site_id, color = ave_annual_precip), method = 'lm', se = F, alpha = 0.5, size = 1) +
+  geom_smooth(aes(yr, bf), col = 'red', method = 'lm') +
+  scale_color_gradientn(colors = hcl.colors('Zissou1', n = 11)) +
+  facet_wrap(MAP_UNIT_N~harv_group) +
+  custom_theme() + 
+  labs(x = 'Sample Year', y = 'Bankfull Width (m)')
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

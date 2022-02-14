@@ -1,0 +1,78 @@
+---
+title: "equivalence testing"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+library(latex2exp)
+knitr::opts_chunk$set(dev.args = list(png = list(type = "cairo")),fig.width = 10, fig.height = 5,
+                      warning = FALSE, message = FALSE, error = FALSE)
+library(patchwork)
+library(tidyverse)
+library(GGally)
+library(ggtext)
+library(sasLM)
+library(janitor)
+library(car)
+library(broom)
+library(ggpubr)
+library(rstatix)
+library(readxl)
+library(sf)
+library(lme4)
+library(resourceviz)
+library(extrafont)
+thematic::thematic_on(font = 'Calibri')
+source('utils.R')
+library(jtools)
+library(robustlmm)
+library(lme4)
+library(TOSTER)
+library(lmerTest)
+```
+
+
+
+```{r}
+
+lmm_bf <- lmer(bf ~ log(shed_areakm2) + log(ave_annual_precip) + mgmt + (1 | MAP_UNIT_N/site_name), gr_95_ts, REML = F)
+
+#lmmr bank angle
+
+lmm_ba <- rlmer(bank_angle ~ log(shed_areakm2) + log(ave_basin_elev) + mgmt + (1 | MAP_UNIT_N/site_name), gr_95_ts, REML = F)
+```
+
+
+```{r}
+bound_u <-  0.5  # Upper equivalence bound
+bound_l <- -0.5  # Lower equivalence bound
+```
+
+
+```{r}
+class(lmm_bf) <- 'lmerModLmerTest'
+length()
+names(lmm_bf@vcov_beta) < - 'beta'
+lower <- contest1D(lmm_bf, c(0,0,0,1), confint=TRUE, rhs=-.3) # get t value for test against lower bound
+upper <- contest1D(lmm_bf, c(0,0,0,1), confint=TRUE, rhs=0.3) # get t value for test against upper bound
+lower
+upper
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

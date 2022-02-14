@@ -183,3 +183,71 @@ toltune <- function(object, len, metric = "", title = "", plot = TRUE){
   return(list(tolit, pp))
 
 }
+
+
+pibo_sites <- read_sf('pibo_sites.gpkg', 'pibo_sites')
+
+pibo_ml <- read_csv('pibo_ml.csv')
+
+gr_95_new <- read_xlsx('R1WestPIBO110521.xlsx') %>%
+  clean_names()
+
+gr_95 <- read_csv('SummaryStatsKendall_gr_95.csv')[,1:36] %>%
+  na.omit() %>%
+  clean_names() %>%
+  right_join(gr_95_new %>% select(site_id), by = 'site_id') %>%
+  mutate(precip_cut = cut_interval(ave_annual_precip,n=6),
+         shed_cut = cut_interval(shed_areakm2, n = 6),
+         mgmt = factor(mgmt))
+
+gr_95 <- gr_95 %>% left_join(pibo_sites %>% st_drop_geometry() %>%
+                               select(MAP_UNIT_N, site_id),
+                             by = 'site_id')
+gr_95 <- pibo_ml %>%
+  pivot_longer(contains('hydrogrp')) %>%  select(name, value, site_id) %>%
+  group_by(site_id) %>% slice_max(value, with_ties = F) %>% select(site_id,hydro_group = 'name') %>%
+  ungroup() %>%
+  right_join(gr_95)
+
+library(tidymodels)
+
+pca_pibo <- recipe(mean_bf ~ ., data = pibo_ml %>%
+                     select(contains("SWE_"),
+                            contains("US_TMAX"),
+                            contains("hydrogr"),site_id, SWE_AVG_0401_CPG_all) %>%
+                     right_join(gr_95 %>% select(mean_bf, site_id), by = 'site_id')) %>%
+  update_role(site_id,SWE_AVG_0401_CPG_all, new_role = 'bring_along') %>%
+  step_center(all_predictors()) %>%
+  step_scale(all_predictors()) %>%
+  step_pca(all_predictors())
+
+pca_swe <- prep(pca_pibo) %>% juice()
+
+gr_95 <- gr_95 %>% left_join(pca_swe %>% select(site_id, PC1,SWE_AVG_0401_CPG_all)) %>%
+  mutate(pca_group = cut_interval(PC1, n = 5))
+
+gr_95_all <- read_xlsx('R1WestDividePIBO.xlsx',
+                       sheet = 'R1WestHabitat') %>% clean_names()
+
+gr_95_ts <- gr_95_all %>%
+  right_join(gr_95 %>% select(site_id, drain_density:pct_nfs, mean_bf:shed_cut,MAP_UNIT_N,hydro_group,pca_group,SWE_AVG_0401_CPG_all, -mgmt)) %>%
+  mutate(impact_fire = pct_mtbs_mod+pct_mtbs_high,
+         impact_harvest = pct_high_harv_int+pct_mod_harv_int,
+         harv_group = ifelse(impact_harvest <= 5, 'Low', ifelse(impact_harvest > 5 & impact_harvest <= 18, 'Mod', 'High')),
+         harv_group = factor(harv_group, levels = c('Low', 'Mod', 'High')),
+         fire_group = ifelse(impact_fire <= 5, 'Low', ifelse(impact_fire > 5 & impact_fire <= 18, 'Mod', 'High')),
+         fire_group = factor(fire_group, levels = c('Low', 'Mod', 'High')))
+
+gr_95_ts <- gr_95_ts %>%
+  group_by(site_id) %>% summarise(sd_bf = sd(bf, na.rm = T),
+                                  meanbf = mean(bf, na.rm = T),
+                                  coef_bf = sd_bf/meanbf,
+                                  coef_bfl = sqrt(exp(sd(log(bf), na.rm = TRUE)^2)-1),
+                                  sd_ba = sd(bank_angle, na.rm = T),
+                                  meanba = mean(bank_angle, na.rm = T),
+                                  coef_ba = sd_ba/meanba,
+                                  coef_bal = sqrt(exp(sd(log(bank_angle), na.rm = TRUE)^2)-1)) %>%
+  ungroup() %>%
+  left_join(gr_95_ts, by = 'site_id')
+
+gr_95 <- gr_95_ts %>% group_by(site_id) %>% slice(n = 1) %>% ungroup()

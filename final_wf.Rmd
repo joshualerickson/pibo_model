@@ -421,16 +421,17 @@ summary(mod_bf_elev)
 
 ```{r}
 #for mean_bf filter out high residuals
-mod_bf_filt <- lm(log(mean_bf)~log(shed_areakm2)+log(ave_annual_precip)+mgmt, data =gr_95[-75,])
+mod_bf_filt <- lm(mean_bf~log(shed_areakm2)+log(ave_annual_precip)+MAP_UNIT_N+mgmt, data =gr_95[-75,])
 Anova(mod_bf_filt, type = 'III')
 
 #for mean_bf WITHOUT filtering high residuals
-mod_bf <- lm(log(mean_bf)~log(shed_areakm2)+log(ave_annual_precip)+mgmt, data = gr_95)
+mod_bf <- lm(mean_bf~log(shed_areakm2)+log(ave_annual_precip)+MAP_UNIT_N+mgmt, data = gr_95)
 Anova(mod_bf, type = 'III')
-
 #for mean bank angle
-mod_bank <- lm(mean_bank_an~log(shed_areakm2)+log(ave_basin_elev)+mgmt, data = gr_95)
+mod_bank <- lm(mean_bank_an~log(shed_areakm2)+log(ave_basin_elev)+MAP_UNIT_N+mgmt, data = gr_95)
+summary(mod_bank)
 Anova(mod_bank, type = 'III')
+
 ```
 
 ## Now we'll look at estimated marginal means
