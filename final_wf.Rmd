@@ -26,147 +26,18 @@ library(readxl)
 thematic::thematic_on(font = 'Montserrat')
 source('utils.R')
 library(sf)
-pibo_sites <- read_sf('pibo_sites.gpkg', 'pibo_sites')
-
-gr_95_new <- read_xlsx('R1WestPIBO110521.xlsx') %>% 
-  clean_names()
-
-gr_95 <- read_csv('SummaryStatsKendall_gr_95.csv')[,1:36] %>% 
-  na.omit() %>%
-  clean_names() %>% 
-  right_join(gr_95_new %>% select(site_id), by = 'site_id') %>%
-  mutate(precip_cut = cut_interval(ave_annual_precip,n=6),
-         shed_cut = cut_interval(shed_areakm2, n = 6),
-         mgmt = factor(mgmt))
-gr_95 <- gr_95 %>% left_join(pibo_sites %>% st_drop_geometry() %>% 
-                               select(MAP_UNIT_N, site_id), by = 'site_id')
 
 ```
 
-## TL;DR
-
-Below are the results of the ANCOVA model for mean bankfull and mean
-bank angle. There were some residuals in mean bankfull that were
-affecting the normality of residuals assumption (effects estimating
-coeff CIs) so I included a 'filtered' and 'not filtered' analysis for
-mean bank full. For mean bank angle everything checked out
-`r emo::ji('smile')`. Below is a quick table of the results. I'm sure
-we'll be discussing. In my opinion, it's right on the verge (for both
-variables) of being an effect; however, it's a smaller effect than what
-I expected. What I mean is that precipitation and area dominate the
-explained variance in the model (for mean bankfull) so to me the effect
-size is smaller than I suspected and changes depending on area and
-precip (see estimated marginal mean plots at the very bottom). In short,
-there is likely an effect to some degree but I'm not sure that it is
-really that meaningful when nested with hydrophysiographic variables
-like precip and area (among others). I was expecting something
-surprising but it's really quite comparable even when blocking by
-ecoregions.
-
-+----------------+------------+------------+------------+------------+
-| DV             | IV         | pvalue     | beta       | 95% CI     |
-+:==============:+:==========:+:==========:+:==========:+:==========:+
-| mean_bf        | mgmt       | 0.043      | beta =     | [0.01,     |
-|                |            |            | 0.44       | 0.86]      |
-+----------------+------------+------------+------------+------------+
-| mean_bf (with  | mgmt       | 0.239      | beta =     | [-0.19,    |
-| all residuals) |            |            | 0.28       | 0.74]      |
-+----------------+------------+------------+------------+------------+
-| mean_bank_an   | mgmt       | 0.116      | beta =     | [-0.65,    |
-|                |            |            | 2.64       | 5.93]      |
-+----------------+------------+------------+------------+------------+
-
-: Results
-
-**Mean bankfull width**
-
-We fitted a linear model (estimated using OLS) to predict mean_bf with
-shed_areakm2, ave_annual_precip and mgmt (formula: mean_bf \~
-log(shed_areakm2) + log(ave_annual_precip) + mgmt). The model explains a
-statistically significant and substantial proportion of variance (R2 =
-0.76, F(3, 298) = 314.23, p \< .001, adj. R2 = 0.76). The model's
-intercept, corresponding to shed_areakm2 = 0, ave_annual_precip = 0 and
-mgmt = Managed, is at -41.71 (95% CI [-47.78, -35.63], t(298) = -13.52,
-p \< .001). Within this model:
-
-*taking three residuals out*
-
--   The effect of shed_areakm2 [log] is statistically significant and
-    positive (beta = 2.86, 95% CI [2.64, 3.08], t(298) = 25.20, p \<
-    .001; Std. beta = 1.78, 95% CI [1.64, 1.91])
-
--   The effect of ave_annual_precip [log] is statistically significant
-    and positive (beta = 5.70, 95% CI [4.83, 6.57], t(298) = 12.87, p \<
-    .001; Std. beta = 1.13, 95% CI [0.97, 1.30])
-
--   The effect of mgmt [Reference] is statistically significant and
-    positive (beta = 0.44, 95% CI [0.01, 0.86], t(298) = 2.03, p =
-    0.043; Std. beta = 0.12, 95% CI [2.58e-03, 0.23])
-
-*including all residuals*
-
--   The effect of shed_areakm2 [log] is statistically significant and
-    positive (beta = 2.99, 95% CI [2.75, 3.24], t(301) = 24.18, p \<
-    .001; Std. beta = 1.79, 95% CI [1.66, 1.93])
-
--   The effect of ave_annual_precip [log] is statistically significant
-    and positive (beta = 5.75, 95% CI [4.79, 6.71], t(301) = 11.80, p \<
-    .001; Std. beta = 1.08, 95% CI [0.91, 1.25])
-
--   The effect of mgmt [Reference] is statistically non-significant and
-    positive (beta = 0.28, 95% CI [-0.19, 0.74], t(301) = 1.18, p =
-    0.239; Std. beta = 0.07, 95% CI [-0.04, 0.19])
-
-**Mean bank angle**
-
-We fitted a linear model (estimated using OLS) to predict mean_bank_an
-with shed_areakm2, ave_basin_elev and mgmt (formula: mean_bank_an \~
-log(shed_areakm2) + log(ave_basin_elev) + mgmt). The model explains a
-statistically significant and substantial proportion of variance (R2 =
-0.28, F(3, 301) = 38.80, p \< .001, adj. R2 = 0.27). The model's
-intercept, corresponding to shed_areakm2 = 0, ave_basin_elev = 0 and
-mgmt = Managed, is at 249.88 (95% CI [191.84, 307.92], t(301) = 8.47, p
-\< .001). Within this model:
-
--   The effect of shed_areakm2 [log] is statistically significant and
-    positive (beta = 8.27, 95% CI [6.62, 9.91], t(301) = 9.89, p \<
-    .001; Std. beta = 1.11, 95% CI [0.86, 1.35])
--   The effect of ave_basin_elev [log] is statistically significant and
-    negative (beta = -23.24, 95% CI [-31.22, -15.26], t(301) = -5.73, p
-    \< .001; Std. beta = -0.86, 95% CI [-1.17, -0.54])
--   The effect of mgmt [Reference] is statistically non-significant and
-    positive (beta = 2.64, 95% CI [-0.65, 5.93], t(301) = 1.58, p =
-    0.116; Std. beta = 0.16, 95% CI [-0.06, 0.38])
 
 ## Finding/Exploring/Selecting Covariates
 
 ```{r}
 gr_95 %>% count(mgmt)
 
-cortest_cols <- function(data, dv, cols){
-  
-  data_cov <- data %>% select({{cols}})
-  data_dv <- data %>% select({{dv}}) %>% pull()
-  
-  final_data <- data.frame()
-  
-for(i in 1:length(data_cov)){
-  
-y <- data_cov[i] %>% pull()
-corT <- broom::tidy(cor.test(as.numeric(data_dv), as.numeric(y)))
-corT$estimate <- corT$estimate
-corT$pvalue <- corT$p.value
-corT <- corT %>% mutate(var = names(data_cov[i]))
-final_data <- plyr::rbind.fill(final_data, corT)
+mean_bf_cor <- cortest_cols(gr_95, mean_bf, c(drain_density:pct_mtbs_high,aug_et_2000_2015_cpg_all:us_tmax_1981_2010_int_cpg_all, PC1, PC2))
 
-}
-
-  final_data
-}  
-
-mean_bf_cor <- cortest_cols(gr_95, mean_bf, c(drain_density:pct_mtbs_high))
-
-mean_bank_angle_cor <- cortest_cols(gr_95, mean_bank_an, c(drain_density:pct_mtbs_high))
+mean_bank_angle_cor <- cortest_cols(gr_95, mean_bank_an, c(drain_density:pct_mtbs_high,aug_et_2000_2015_cpg_all:us_tmax_1981_2010_int_cpg_all, PC1, PC2))
 
 variables_to_check_bf <- mean_bf_cor %>% 
   filter(pvalue <= 0.05)
@@ -178,19 +49,31 @@ variables_to_check_angle <- mean_bank_angle_cor %>%
 
 library(GGally)
 
-ggpairs(gr_95 %>% select(mean_bank_an, variables_to_check_angle$var, mgmt),
+ggpairs(gr_95 %>% select(mean_bank_an, variables_to_check_angle$var[1:9], mgmt),
         mapping = aes(color = mgmt), upper = list(continuous = wrap("cor", size = 3)),
         lower = list(continuous = wrap("smooth", method = "lm", se = F,
-                                               alpha = 0.6)))+
+                                               alpha = 0.6))) +
   custom_theme() + labs(title = 'Comparing Mean Bank Angle with Potential Covariates')
 
-ggpairs(gr_95 %>% select(mean_bf, variables_to_check_bf$var[6:10], mgmt),
+ggpairs(gr_95 %>% select(mean_bank_an, variables_to_check_angle$var[10:19], mgmt),
+        mapping = aes(color = mgmt), upper = list(continuous = wrap("cor", size = 3)),
+        lower = list(continuous = wrap("smooth", method = "lm", se = F,
+                                               alpha = 0.6))) +
+  custom_theme() + labs(title = 'Comparing Mean Bank Angle with Potential Covariates')
+
+ggpairs(gr_95 %>% select(mean_bf, variables_to_check_bf$var[1:9], mgmt),
         mapping = aes(color = mgmt), upper = list(continuous = wrap("cor", size = 3)),
         lower = list(continuous = wrap("smooth", method = "lm", se = F,
                                                alpha = 0.6)))+
   custom_theme() + labs(title = 'Comparing Mean Bankfull Width with Potential Covariates')
 
-ggpairs(gr_95 %>% select(mean_bf, variables_to_check_bf$var[1:5], mgmt),
+ggpairs(gr_95 %>% select(mean_bf, variables_to_check_bf$var[9:19], mgmt),
+        mapping = aes(color = mgmt), upper = list(continuous = wrap("cor", size = 3)),
+        lower = list(continuous = wrap("smooth", method = "lm", se = F,
+                                               alpha = 0.6)))+
+  custom_theme() + labs(title = 'Comparing Mean Bankfull Width with Potential Covariates')
+
+ggpairs(gr_95 %>% select(mean_bf, variables_to_check_bf$var[20:27], mgmt),
         mapping = aes(color = mgmt), upper = list(continuous = wrap("cor", size = 3)),
         lower = list(continuous = wrap("smooth", method = "lm", se = F,
                                                alpha = 0.6)))+
@@ -199,8 +82,8 @@ ggpairs(gr_95 %>% select(mean_bf, variables_to_check_bf$var[1:5], mgmt),
 
 ```
 
-Looks like `shed_areakm2` and `ave_annual_precip` for `mean_bf` and
-`shed_areakm2` and `ave_basin_elev` for `mean_bank_an`. These have
+Looks like `fac_taudem_17all_int`, `us_precip_1981_2010_cpg_all`, `clay_100_cpg_all`, `slope_percent_int_cpg_all` and `us_tmax_1981_2010_int_cpg_all` for `mean_bf` and
+`fac_taudem_17all_int`, `ave_basin_elev`, `silt_100_cpg_all`, `streamslope_percent_int_cpg_all` and `twi_100_int_cpg_all` for `mean_bank_an`. These have
 decent $r$ values and also make sense causally so we'll add them to the
 model.
 
@@ -220,42 +103,22 @@ the are linear.
 
 ```{r}
 #mean bf
-gr_95 %>%
-  ggplot(aes(shed_areakm2, mean_bf)) +
-  geom_point() + 
-  geom_smooth(method = 'lm') + custom_theme()
-  
-#looks a little curves towards the lower watershed areas; log transform
-
 gr_95 %>% 
-  ggplot(aes(shed_areakm2, mean_bf)) +
+  ggplot(aes(swe_avg_0301_cpg_all, mean_bf, color = mgmt)) +
   geom_point() + 
   scale_x_log10() +
-  geom_smooth(method = 'lm') + custom_theme()
-
-# precip 
-
-gr_95 %>% 
-  ggplot(aes(ave_annual_precip, mean_bf)) +
-  geom_point() + 
-  scale_x_log10() +
-  geom_smooth(method = 'lm') + custom_theme()
-
-#much better
+  scale_y_log10() +
+  geom_smooth(method = 'lm') +
+  custom_theme()
 
 #now to mean bank angle
 
-gr_95 %>%
-  ggplot(aes(shed_areakm2, mean_bank_an)) +
-  geom_point() + 
-  geom_smooth(method = 'lm') + custom_theme()
 
-#sure...
-
-gr_95 %>% filter(shed_areakm2 >= 2) %>%
-  ggplot(aes(shed_areakm2, mean_bank_an, color = mgmt)) +
+gr_95 %>% 
+  ggplot(aes(streamslope_percent_int_cpg_all, mean_bank_an, color = mgmt)) +
   geom_point() + 
   scale_x_log10()+
+  scale_y_log10() +
   geom_smooth(method = 'lm') + custom_theme()
 
 # much better
@@ -271,14 +134,25 @@ we don't have any multicollinearity.
 
 #create our model for mean_bf
 #anything over five is a problem
-mod_bf <- lm(mean_bf~log(shed_areakm2)+log(ave_annual_precip)+mgmt, data = gr_95)
+mod_bf <- lm(log(mean_bf)~log(fac_taudem_17all_int)+
+               log(us_precip_1981_2010_cpg_all)+
+               log(us_tmax_1981_2010_int_cpg_all) +
+               log(swe_avg_0301_cpg_all) +
+               log(clay_100_cpg_all)+
+               log(slope_percent_int_cpg_all)+
+               mgmt, data = gr_95)
 car::vif(mod_bf)
 
 #looks good
 
 #create our model for mean_bank_angle
 #anything over five is a problem
-mod_bank <- lm(mean_bank_an~log(shed_areakm2)+log(ave_basin_elev)+mgmt, data = gr_95)
+mod_bank <- lm(log(mean_bank_an)~log(fac_taudem_17all_int)+
+                 log(ave_basin_elev)+
+                 log(streamslope_percent_int_cpg_all) +
+                 log(silt_100_cpg_all) +
+                 log(twi_100_int_cpg_all) +
+                 mgmt, data = gr_95)
 car::vif(mod_bank)
 
 #looks good
@@ -303,14 +177,44 @@ We'll run the models for ANCOVA below for both dv's.
 ```{r}
 
 #for mean_bf
-mod_bf <- lm(log(mean_bf)~log(shed_areakm2)+log(ave_annual_precip)+mgmt, data = gr_95)
+mod_bf <- lm(log(mean_bf)~log(fac_taudem_17all_int)+
+               log(us_precip_1981_2010_cpg_all)+
+               log(us_tmax_1981_2010_int_cpg_all) +
+               log(swe_avg_0301_cpg_all) +
+               log(clay_100_cpg_all)+
+               log(slope_percent_int_cpg_all)+
+               MAP_UNIT_N +
+               mgmt, data = gr_95)
+Anova(mod_bf, type = 'III')
+
+#update
+
+mod_bf <- lm(log(mean_bf)~log(fac_taudem_17all_int)+
+               log(us_precip_1981_2010_cpg_all)+
+               log(slope_percent_int_cpg_all)+
+               MAP_UNIT_N +
+               mgmt, data = gr_95)
 Anova(mod_bf, type = 'III')
 
 
 #for mean_bank_an
-mod_bank <- lm(mean_bank_an~log(shed_areakm2)+log(ave_basin_elev)+mgmt, data = gr_95)
+mod_bank <- lm(log(mean_bank_an)~log(fac_taudem_17all_int)+
+                 log(ave_basin_elev)+
+                 log(streamslope_percent_int_cpg_all) +
+                 log(silt_100_cpg_all) +
+                 log(twi_100_int_cpg_all) +
+                 MAP_UNIT_N +
+                 mgmt, 
+                 data = gr_95)
 Anova(mod_bank, type = 'III')
 
+#update
+mod_bank <- lm(log(mean_bank_an)~log(fac_taudem_17all_int)+
+                 log(ave_basin_elev)+
+                 log(twi_100_int_cpg_all) +
+                 MAP_UNIT_N +
+                 mgmt, data = gr_95)
+Anova(mod_bank, type = 'III')
 
 ```
 
@@ -342,9 +246,9 @@ Let's look at the `mod_bf` model and see what's going on.
 
 ```{r}
 qqPlot(mod_bf)
-ggplot() +
-  geom_density(aes(mod_bf$residuals[-75]))
-
+qqPlot(mod_bank)
+plot(mod_bank)
+plot(mod_bf)
 ```
 
 As you can see we have some high positive residuals that are long in
@@ -375,9 +279,13 @@ I think just taking out the location `r gr_95[75,]$stream`.
 ```{r}
 #now let's do the qqPlot() without these
 
-mod_bf_filt <- lm(log(mean_bf)~log(shed_areakm2)+log(ave_annual_precip)+mgmt, data = gr_95)
+mod_bf_filt <- lm(log(mean_bf)~log(fac_taudem_17all_int)+
+               log(us_precip_1981_2010_cpg_all)+
+               log(slope_percent_int_cpg_all)+
+               MAP_UNIT_N +
+               mgmt, data = gr_95)
 gr_95$residuals <- mod_bf_filt$residuals
-mod_bf_filt <- lm(log(mean_bf)~log(shed_areakm2)+log(ave_annual_precip)+mgmt, data = gr_95[-c(75),])
+mod_bf_filt <- lm(log(mean_bf)~log(shed_areakm2)+log(ave_annual_precip)+mgmt, data = gr_95[-c(75, 193, 276),])
 qqPlot(mod_bf_filt)
 check_normality(mod_bf_filt)
 ```
@@ -402,17 +310,30 @@ If the covariate and iv interaction are significant then we have
 violated the assumption.
 
 ```{r}
-mod_bf_precip <- lm(log(mean_bf)~mgmt*log(ave_annual_precip), data = gr_95)
+
+mod_bf_precip <- lm(log(mean_bf)~mgmt*log(us_precip_1981_2010_cpg_all), data = gr_95)
 summary(mod_bf_precip)
 #passed
 
-mod_bf_shed <- lm(log(mean_bf)~mgmt*log(shed_areakm2), data = gr_95)
+mod_bf_shed <- lm(log(mean_bf)~mgmt*log(fac_taudem_17all_int), data = gr_95)
 summary(mod_bf_shed)
 #passed 
 
+mod_bf_slope <- lm(log(mean_bf)~mgmt*log(slope_percent_int_cpg_all), data = gr_95)
+summary(mod_bf_slope)
+#passed 
 
-mod_ba_elev <- lm(mean_bank_an~mgmt*log(ave_basin_elev), data = gr_95)
-summary(mod_bf_elev)
+
+mod_ba_elev <- lm(log(mean_bank_an)~mgmt*log(ave_basin_elev), data = gr_95)
+summary(mod_ba_elev)
+#passed
+
+mod_ba_twi <- lm(log(mean_bank_an)~mgmt*log(twi_100_int_cpg_all), data = gr_95)
+summary(mod_ba_twi)
+
+#passed
+mod_ba_shed <- lm(log(mean_bank_an)~mgmt*log(fac_taudem_17all_int), data = gr_95)
+summary(mod_ba_shed)
 #passed
 
 ```
@@ -421,14 +342,28 @@ summary(mod_bf_elev)
 
 ```{r}
 #for mean_bf filter out high residuals
-mod_bf_filt <- lm(mean_bf~log(shed_areakm2)+log(ave_annual_precip)+MAP_UNIT_N+mgmt, data =gr_95[-75,])
-Anova(mod_bf_filt, type = 'III')
+mod_bf_filt <- lm(log(mean_bf)~log(fac_taudem_17all_int)+
+               log(us_precip_1981_2010_cpg_all)+
+               log(slope_percent_int_cpg_all)+
+               MAP_UNIT_N +
+               mgmt, 
+               data =gr_95[-c(75, 193, 276),])
 
+Anova(mod_bf_filt, type = 'III')
+summary(mod_bf_filt)
 #for mean_bf WITHOUT filtering high residuals
-mod_bf <- lm(mean_bf~log(shed_areakm2)+log(ave_annual_precip)+MAP_UNIT_N+mgmt, data = gr_95)
+mod_bf <- lm(log(mean_bf)~log(fac_taudem_17all_int)+
+               log(us_precip_1981_2010_cpg_all)+
+                log(slope_percent_int_cpg_all)+
+                 MAP_UNIT_N +
+                 mgmt, data = gr_95)
 Anova(mod_bf, type = 'III')
 #for mean bank angle
-mod_bank <- lm(mean_bank_an~log(shed_areakm2)+log(ave_basin_elev)+MAP_UNIT_N+mgmt, data = gr_95)
+mod_bank <- lm(log(mean_bank_an)~log(fac_taudem_17all_int)+
+                 log(ave_basin_elev)+
+                 log(twi_100_int_cpg_all) +
+                 MAP_UNIT_N +
+                 mgmt, data = gr_95)
 summary(mod_bank)
 Anova(mod_bank, type = 'III')
 
@@ -443,231 +378,56 @@ confidence intervals to see how the groups compare.
 library(emmeans)
 library(car)
 
-bf.rg <- ref_grid(mod_bf_filt, at = list(shed_areakm2 = seq(1, 100, 5)))
+bf.rg <- ref_grid(mod_bf_filt, at = list(fac_taudem_17all_int = seq(10000, 163291, 16329.1)))
 
 emm <- plot(bf.rg, by = 'mgmt') + custom_theme()
 
 emm_gg <- as.data.frame(emm$data) %>% tibble()
 
 
-p1 <- emm_gg %>% mutate(shed_area = ifelse(mgmt %in% 'Reference', shed_areakm2+1.25, shed_areakm2-1.25),
+p1 <- emm_gg %>% mutate(shed_area = ifelse(mgmt %in% 'Reference', fac_taudem_17all_int+4000, fac_taudem_17all_int-4000),
                         the.emmean = exp(the.emmean),
                         lower.CL = exp(lower.CL),
                         upper.CL = exp(upper.CL)) %>% filter(the.emmean >0) %>% 
   ggplot() +
   #geom_point(data = gr_95 , aes(mean_bf, shed_areakm2, color = mgmt), size = 3, alpha = 0.2)+
-  geom_errorbar(aes(the.emmean, shed_areakm2, color=mgmt,xmin = lower.CL, xmax = upper.CL),
+  geom_errorbar(aes(the.emmean, fac_taudem_17all_int, color=mgmt,xmin = lower.CL, xmax = upper.CL),
   position = position_dodge2(width = 0.005, padding = 0.005), size = .75) + 
-  custom_theme(font_size = 10) + labs(x = 'Predicted Mean Bankfull Width (m)', 
+  custom_theme(font_size = 12) + labs(x = 'Predicted Mean Bankfull Width (m)', 
                         y = 'Watershed Area km2',
                         color = "Group",
                         title = 'Comparing estimated means by Watershed Area (km<sup>2</sup>) (without high residuals)',
-                        subtitle = 'Average annual precipitation is held constant at 1193 (mm)') +
-  geom_point(aes(the.emmean, shed_area), size = 1)  +
-  geom_line(aes(the.emmean, shed_areakm2,color = mgmt, group = mgmt),
-  position = position_dodge2(width = 0.1, padding = 0), alpha = 0.25)
+                        subtitle = 'Average annual precipitation is held constant at 1193 (mm)')  +
+  geom_point(aes(the.emmean, shed_area), size = 1) +
+  facet_wrap(~MAP_UNIT_N)
 p1 
-managed <- emm_gg[1:20,]
-ref <- emm_gg[21:40,]
 
-managed <- managed %>% mutate(refCL = ref$lower.CL, 
-                              highCL = ref$upper.CL,
-                              emmean = ref$the.emmean,
-                              se_emmean = ref$SE)
-p2 <- managed %>% mutate(cross_zero = refCL-the.emmean,
-                         model = 'Filtered\npvalue = 0.043') %>% 
-  ggplot(aes(shed_areakm2, cross_zero)) +
-  geom_col() + 
-  labs(x = 'Watershed Area km<sup>2</sup>',
-       y = 'difference',
-       title = 'Difference between Reference Lower CI and Estimated Mean of Managed (without high residuals)') +
-  custom_theme(font_size = 10)
 
-p2
 
- bf.rg <- ref_grid(mod_bf, at = list(shed_areakm2 = seq(1, 100, 5)))
 
-emm <- plot(bf.rg, by = 'mgmt') + custom_theme()
+ba.rg <- ref_grid(mod_bank, at = list(fac_taudem_17all_int = seq(10000, 163291, 16329.1)))
+
+emm <- plot(ba.rg, by = 'mgmt') + custom_theme()
 
 emm_gg <- as.data.frame(emm$data) %>% tibble()
 
 
-p3 <- emm_gg %>% mutate(shed_area = ifelse(mgmt %in% 'Reference', shed_areakm2+1.25, shed_areakm2-1.25)) %>% filter(the.emmean >0) %>% 
+p1 <- emm_gg %>% mutate(shed_area = ifelse(mgmt %in% 'Reference', fac_taudem_17all_int+4000, fac_taudem_17all_int-4000),
+                        the.emmean = exp(the.emmean),
+                        lower.CL = exp(lower.CL),
+                        upper.CL = exp(upper.CL)) %>% filter(the.emmean >0) %>% 
   ggplot() +
   #geom_point(data = gr_95 , aes(mean_bf, shed_areakm2, color = mgmt), size = 3, alpha = 0.2)+
-  geom_errorbar(aes(the.emmean, shed_areakm2, color=mgmt,xmin = lower.CL, xmax = upper.CL),
+  geom_errorbar(aes(the.emmean, fac_taudem_17all_int, color=mgmt,xmin = lower.CL, xmax = upper.CL),
   position = position_dodge2(width = 0.005, padding = 0.005), size = .75) + 
-  custom_theme(font_size = 10) + labs(x = 'Predicted Mean Bankfull Width (m)', 
+  custom_theme(font_size = 12) + labs(x = 'Predicted Mean Bankfull Width (m)', 
                         y = 'Watershed Area km2',
                         color = "Group",
-                        title = 'Comparing estimated means by Watershed Area (km<sup>2</sup>) (with high residuals)',
-                        subtitle = 'Average annual precipitation is held constant at 1193 (mm)') +
-  geom_point(aes(the.emmean, shed_area), size = 1) 
-p3 
-
-
-```
-
-
-## Linear mixed models  
-
-```{r}
-
-library(lme4)
-library(resourceviz)
-cairo_view()
-ggplot(gr_95_ts) + 
-  geom_point(aes(yr, bf, group = site_id)) + 
-  stat_smooth(geom = 'line',aes(yr,bf, group = site_id, color = mgmt), method = 'lm', se = F, alpha = 0.5, size = 1) +
-  geom_smooth(aes(yr, bf), col = 'red', method = 'lm', size = 1.5) +
-  #scale_color_gradientn(colors = hcl.colors('Zissou1', n = 11)) +
-  facet_wrap(MAP_UNIT_N~mgmt) +
-  custom_theme() + 
-  labs(x = 'Sample Year', y = 'Bankfull Width (m)')
-
-
-ggplot(gr_95_ts) + 
-  geom_point(aes(yr, bf, group = site_id), alpha = 0.05) + 
-  stat_smooth(geom = 'line',aes(yr,bf,color = MAP_UNIT_N), method = 'lm', se = F, size = .5) +
-  geom_smooth(aes(yr, bf), col = 'black', method = 'lm', size = .5, linetype = 2) +
-  #scale_color_gradientn(colors = hcl.colors('Zissou1', n = 11)) +
-  custom_theme() + 
-  facet_wrap(~mgmt) +
-  labs(x = 'Sample Year', y = 'Bankfull Width (m)')
-
-
-
-library(jtools)
-lmm_bf <- lmer(bf ~ log(shed_areakm2) + log(ave_annual_precip) + mgmt + (1 | MAP_UNIT_N/site_name), gr_95_ts, REML = F)
-summ(lmm_bf)
-
-
-lmm_ba <- lmer(bank_angle ~ log(shed_areakm2) + log(ave_basin_elev) + mgmt + (1 | MAP_UNIT_N/site_name),gr_95_ts, REML = F)
-summ(lmm_ba)
-rsb <- list(psi2propII(smoothPsi), psi2propII(smoothPsi, k = 2.28))
-rfm3 <- update(lmm_bf, rho.sigma.b = rsb)
-
-plot(rfm3)
-
-compare(lmm_bf, rfm3, show.rho.functions = F)
-library(robustlmm)
-lmm_bf <- rlmer(bf ~ log(shed_areakm2) + log(ave_annual_precip) + mgmt + (1 | MAP_UNIT_N/site_name), gr_95_ts, REML = F)
-
-lmm_bf2 <- lmer(bf ~ log(shed_areakm2) + log(ave_annual_precip) + mgmt + (1 | MAP_UNIT_N/site_name), gr_95_ts, REML = F)
-
-summ(lmm_bf)
-summary(lmm_bf)
-anova(lmm_bf)
-coefs <- data.frame(coef(summary(lmm_bf2)))
-
-# get coefficients from robust model to extract t-values
-coefs.robust <- coef(summary(lmm_bf))
-rownames(coefs.robust) <- NULL
-# calculate p-values based on robust t-values and non-robust approx. DFs
-p.values <- 2*pt(abs(coefs.robust[,3]), abs(coefs$t.value), lower=FALSE)
-
-
-lmm_ba <- rlmer(bank_angle ~ log(shed_areakm2) + log(ave_basin_elev) + mgmt + (1 | MAP_UNIT_N/site_name),gr_95_ts, REML = F)
-summ(lmm_ba)
-
-
-ggplot(gr_95_ts) + 
-  geom_point(aes(yr, bank_angle, group = site_id), alpha = 0.05) + 
-  stat_smooth(geom = 'line',aes(yr,bank_angle,color = MAP_UNIT_N), method = 'lm', se = F, size = .5) +
-  geom_smooth(aes(yr, bank_angle), col = 'black', method = 'lm', size = .5, linetype = 2) +
-  #scale_color_gradientn(colors = hcl.colors('Zissou1', n = 11)) +
-  custom_theme() + 
-  facet_wrap(~mgmt) +
-  labs(x = 'Sample Year', y = 'Bankfull Width (m)')
-
-ggplot(gr_95_ts %>% filter(mgmt == 'Managed')) + 
-  geom_point(aes(yr, bf, group = site_id), alpha = 0.05) + 
-  stat_smooth(geom = 'line',aes(yr,bf,color = harv_group), method = 'lm', se = F, size = .5) +
-  scale_color_manual(values = c('blue', 'green', 'red')) +
-  custom_theme() +
+                        title = 'Comparing estimated means by Watershed Area (km<sup>2</sup>) (without high residuals)',
+                        subtitle = 'Average Basin Elevation is held constant at 1674 (m)\nTWI-CPG at 669')  +
+  geom_point(aes(the.emmean, shed_area), size = 1) +
   facet_wrap(~MAP_UNIT_N)
+p1 
 
-
-library(performance)
-check_normality(lmm_bf2)
-check_heteroscedasticity(lmm_bf)
-check_normality(lmm_ba)
-check_heteroscedasticity(lmm_ba)
-plot(lmm_ba)
-plot(lmm_bf)
-qqPlot(lmm_bf)
-plot(lmm_bf)
-plot(residuals(lmm_bf, 'weighted'))
-
-shapiro.test(residuals(lmm_bf))
-shapiro.test(rnorm(1000))
 ```
-
-
-
-```{r}
-gr_95_ts <- gr_95_all %>%
-  right_join(gr_95 %>% select(site_id, drain_density:pct_nfs, mean_bf:shed_cut,MAP_UNIT_N, -mgmt)) %>%
-  mutate(impact_fire = pct_mtbs_mod+pct_mtbs_high,
-         impact_harvest = pct_high_harv_int+pct_mod_harv_int,
-         harv_group = ifelse(impact_harvest <= 5, 'Low', ifelse(impact_harvest > 5 & impact_harvest <= 15, 'Mod', 'High')),
-         harv_group = factor(harv_group, levels = c('Low', 'Mod', 'High')),
-         fire_group = ifelse(impact_fire <= 5, 'Low', ifelse(impact_fire > 5 & impact_fire <= 18, 'Mod', 'High')),
-         fire_group = factor(fire_group, levels = c('Low', 'Mod', 'High')))
-
-gr_95_ts <- gr_95_ts %>%
-  group_by(site_id) %>% summarise(sd_bf = sd(bf, na.rm = T),
-                                  meanbf = mean(bf, na.rm = T),
-                                  coef_bf = sd_bf/meanbf,
-                                  coef_bfl = sqrt(exp(sd(log(bf), na.rm = TRUE)^2)-1),
-                                  sd_ba = sd(bank_angle, na.rm = T),
-                                  meanba = mean(bank_angle, na.rm = T),
-                                  coef_ba = sd_ba/meanba,
-                                  coef_bal = sqrt(exp(sd(log(bank_angle), na.rm = TRUE)^2)-1)) %>%
-  ungroup() %>%
-  left_join(gr_95_ts, by = 'site_id') 
-
-gr_95 <- gr_95_ts %>% group_by(site_id) %>% slice(n = 1) %>% ungroup()
-
-lmm_bf <- lmer(bf ~ log(shed_areakm2) + log(ave_annual_precip) + harv_group + (1 | MAP_UNIT_N/site_name), gr_95_ts %>% filter(mgmt == 'Managed'), REML = F)
-summ(lmm_bf)
-
-
-lmm_ba <- lmer(bank_angle ~ log(shed_areakm2) + log(ave_basin_elev) + harv_group + (1 | MAP_UNIT_N/site_name),gr_95_ts %>% filter(mgmt == 'Managed'), REML = F)
-summ(lmm_ba)
-
-
-lmm_bf <- lmer(bf ~ log(shed_areakm2) + log(ave_annual_precip) + fire_group + (1 | MAP_UNIT_N/site_name), gr_95_ts %>% filter(mgmt == 'Reference'), REML = F)
-summ(lmm_bf)
-
-
-lmm_ba <- lmer(bank_angle ~ log(shed_areakm2) + log(ave_basin_elev) + fire_group + (1 | MAP_UNIT_N/site_name),gr_95_ts %>% filter(mgmt == 'Reference'), REML = F)
-summ(lmm_ba)
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

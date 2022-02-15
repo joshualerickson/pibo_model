@@ -36,7 +36,8 @@ gr_95_ts <- gr_95_all %>%
 
 gr_95_ts <- gr_95_ts %>%
   group_by(site_id) %>% summarise(sd_bf = sd(bf, na.rm = T),
-                                  meanbf = mean(bf, na.rm = T)) %>%
+                                  meanbf = mean(bf, na.rm = T),
+                                  coef_bf = sd_bf/meanbf) %>%
   ungroup() %>%
   left_join(gr_95_ts, by = 'site_id') %>%
   mutate(scaled_bf = (bf - meanbf)/sd_bf)
@@ -73,16 +74,33 @@ gr_95_ts %>%
   facet_func(dv = bf, color = impact_harvest)+
   custom_theme()
 
-gr_95_ts %>% filter(mgmt == "Managed") %>%
+b1 <- gr_95_ts %>% filter(mgmt == "Reference") %>%
   group_by(site_id) %>% mutate(sd_ba = sd(bank_angle, na.rm = T)) %>%
   ungroup() %>%
-  mutate(sd_cut = cut_number(sd_bf,6)) %>%
-  facet_func(dv = bf, color = impact_harvest, cut = sd_cut) +
+  mutate(sd_cut = cut_number(coef_bf,6)) %>%
+  facet_func(dv = bf, color = ave_annual_precip, cut = sd_cut) +
+  scale_color_gradientn(colours = hcl.colors('Zissou1', n = 11, rev = T),
+                        breaks = seq(600, 2000, 400)) +
   custom_theme() + labs(x = 'Sample Date', y = 'Bankfull Width (m)',
-                        title = 'Bankfull Width over Time: faceted by standard deviation',
-                        subtitle = 'Harvest Impact is % of harvest in that watershed during that time',
-                        color = 'Harvest Impact %',
-                        caption = 'Managed Sites Only')
+                        title = 'Bankfull Width over Time: faceted by Coefficient of Variation',
+                        color = 'Avg. Annual Precip (mm)',
+                        caption = 'Reference Sites Only') +
+  ylim(0, 35)
+
+b2 <- gr_95_ts %>% filter(mgmt == "Managed") %>%
+  group_by(site_id) %>% mutate(sd_ba = sd(bank_angle, na.rm = T)) %>%
+  ungroup() %>%
+  mutate(sd_cut = cut_number(coef_bf,6)) %>%
+  facet_func(dv = bf, color = ave_annual_precip, cut = sd_cut) +
+  scale_color_gradientn(colours = hcl.colors('Zissou1', n = 11, rev = T),
+                        breaks = seq(600, 2000, 400))  +
+  custom_theme() + labs(x = 'Sample Date', y = '',
+                        title = '',
+                        color = 'Avg. Annual Precip (mm)',
+                        caption = 'Managed Sites Only')+
+  ylim(0, 35)
+
+(b1+b2) + plot_layout(guides = 'collect')
 
 gr_95_ts %>% filter(mgmt == "Reference") %>%
   group_by(site_id) %>% mutate(sd_ba = sd(bank_angle, na.rm = T)) %>%
