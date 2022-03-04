@@ -28,18 +28,7 @@ library(ggpubr)
 library(rstatix)
 library(readxl)
 library(sf)
-
-
-gr_95_new <- read_xlsx('R1WestPIBO110521.xlsx') %>% 
-  clean_names()
-
-gr_95 <- read_csv('SummaryStatsKendall_gr_95.csv')[,1:36] %>% 
-  na.omit() %>%
-  clean_names() %>% 
-  right_join(gr_95_new %>% select(site_id), by = 'site_id') %>%
-  mutate(precip_cut = cut_interval(ave_annual_precip,n=6),
-         shed_cut = cut_interval(shed_areakm2, n = 6),
-         mgmt = factor(mgmt))
+library(resourceviz)
 
 source('utils.R')
 
@@ -63,7 +52,7 @@ harvest_ts %>%
   scale_color_manual(values = c("#F21A00","#EBCC2A","#3B9AB2")) +
   labs(y = 'Harvest (ha)', color = 'Type of Harvest',
        title = 'Harvest Amount (ha) over Time in Region 1') +
-  custom_theme(font_size = 12)
+  custom_theme(font_size = 6)
   
 ```
 

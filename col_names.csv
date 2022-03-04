@@ -1,0 +1,28 @@
+name,clean_name
+drain_density,Drainage Density (km/km2)
+ave_ann_cwd,Mean Annual Climatic Deficit
+ave_basin_elev,Mean Basin Elevation
+aug_et_2000_2015_cpg_all,FA Aug ET (2000-2015)
+awc_int_100_cpg_all,FA Available Water Capacity
+baseflow_index_cpg_all,FA Baseflow Index
+clay_100_cpg_all,FA Clay %
+dwta_cpg_all,FA Depth to Water Table
+fac_taudem_17all_int,FA Catchment Area
+impermeable_100_cpg_all,FA Impermeable %
+jul_et_2000_2015_cpg_all,FA July ET (2000-2015)
+nlcd_2011_forest_100_cpg_all,FA 2011 NLCD Forest %
+permeable_100_cpg_all,FA Permeable %
+sand_100_cpg_all,FA Sand %
+sep_et_2000_2015_cpg_all,FA Sept ET (2000-2015)
+silt_100_cpg_all,FA Silt %
+slope_percent_int_cpg_all,FA Basin Slope %
+streamslope_percent_int_cpg_all,FA Stream Slope %
+swe_avg_0301_cpg_all,FA Average SWE March
+swe_avg_0401_cpg_all,FA Average SWE April
+swe_avg_0501_cpg_all,FA Average SWE May
+swe_avg_0601_cpg_all,FA Average SWE June
+swe_avg_0701_cpg_all,FA Average SWE July
+swe_avg_0801_cpg_all,FA Average SWE August
+twi_100_int_cpg_all,FA TWI
+us_precip_1981_2010_cpg_all,FA Mean Annual Precipitation
+us_tmax_1981_2010_int_cpg_all,FA Temperature Max

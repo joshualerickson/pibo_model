@@ -2,45 +2,10 @@ library(gt)
 library(tidyverse)
 resourceviz::cairo_view()
 tc <- read_csv('table_cov.csv')
-
+source('utils.R')
 #set up boxplots
 
-
-tct <- gr_95 %>%
-  mutate(total_fire = pct_mtbs_mod+pct_mtbs_mod,
-         total_harvest = pct_high_harv_int+pct_mod_harv_int) %>%
-  select(shed_areakm2,
-                        ave_annual_precip,
-                        ave_ann_cwd,
-                        ave_basin_elev,
-                        drain_density,
-                        grad,
-                        mean_d50,
-                        road_dens_km2,
-                        pct_high_harv_int,
-                        pct_mod_harv_int,
-                        total_harvest,
-                        pct_mod_harv_int,
-                        pct_mtbs_high,
-                        pct_mtbs_mod,
-                        total_fire,
-                        mgmt) %>%
-  pivot_longer(-mgmt) %>%
-  group_by(name) %>%
-  nest() %>%
-  mutate(plot = map(data,
-                    function(df) df %>%
-                      ggplot(aes(mgmt, value)) +
-                      geom_boxplot(
-                        width = .25,
-                        outlier.shape = NA,
-                        aes(fill = mgmt), show.legend = F
-                      ) +
-                      labs(fill = '', x = '', y = '') +
-                      theme_void())) %>%
-  select(-data)
-
-
+glimpse(gr_95)
 tab <- tc %>%
   mutate(across(where(is.numeric), round, 1)) %>%
   group_by(type, mgmt) %>%
@@ -176,8 +141,48 @@ mf_arrow(pos = 'bottomright')
 
 mf_export(x = mtq, filename = "fixed_width.png", width = 500)
 
+tc %>% pivot_longer(everything()) %>% view()
+
+gr_95 %>%
+  select(mgmt, c(drain_density:pct_mtbs_high,aug_et_2000_2015_cpg_all:us_tmax_1981_2010_int_cpg_all)) %>%
+  pivot_longer(-mgmt) %>% pull(name) %>% unique() %>% data.frame(longnames = .) %>% mutate(rowid = row_number()) %>%
+  dplyr::filter(!rowid %in% c(3,5:16)) %>%
+  cbind(tc %>% pivot_longer(everything()) %>% select(value) %>% na.omit()) %>%
+  write_csv('col_names.csv')
+
+name_change <- read_csv('col_names.csv')
+
+name_change <- name_change %>% tibble()
 
 
+var_names <- deframe(name_change)
+
+library(ggh4x)
+
+facet_covs <- gr_95 %>%
+  select(mgmt, c(drain_density:pct_mtbs_high,aug_et_2000_2015_cpg_all:us_tmax_1981_2010_int_cpg_all)) %>%
+  pivot_longer(-mgmt) %>% left_join(name_change, by = c('name')) %>% na.omit() %>%
+  left_join(tc %>% pivot_longer(everything()), by = c('clean_name' = 'value')) %>%
+  mutate(name.y = ifelse(clean_name %in% c('FA Mean Annual Precipitation'), paste('Hydroclimatic'), name.y),
+         name.y = ifelse(clean_name %in% c('FA Temperature Max'), paste('Hydroclimatic'), name.y))
+
+facet_covs %>%
+  ggplot(aes(mgmt, value, fill = mgmt)) +
+  stat_summary(fun.data = calc_boxplot_stat, geom="boxplot") +
+  facet_nested_wrap(~ name.y+clean_name, ncol = 5,
+                    nest_line = element_line(linetype = 1, size = 1.25),
+                    scales = 'free',
+                    axes = "all", remove_labels = "x",
+                    strip  = strip_nested(bleed = TRUE))+
+  scale_y_continuous(labels = scales::comma) +
+  custom_theme()+
+  theme(
+        strip.background = element_blank(),
+        #strip.text = element_text(size = 18),
+        ggh4x.facet.nestline = element_line(colour = c("black")),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank()) +
+  labs(x = '', y = '', fill = '')
 
 
 

@@ -23,9 +23,9 @@ library(broom)
 library(ggpubr)
 library(rstatix)
 library(readxl)
+library(sf)
 thematic::thematic_on(font = 'Montserrat')
 source('utils.R')
-library(sf)
 
 ```
 
@@ -79,7 +79,11 @@ ggpairs(gr_95 %>% select(mean_bf, variables_to_check_bf$var[20:27], mgmt),
                                                alpha = 0.6)))+
   custom_theme() + labs(title = 'Comparing Mean Bankfull Width with Potential Covariates')
 
-
+ggpairs(gr_95 %>% select(mean_bf, c('fac_taudem_17all_int','us_precip_1981_2010_cpg_all', 'us_tmax_1981_2010_int_cpg_all', 'swe_avg_0301_cpg_all', 'clay_100_cpg_all', 'slope_percent_int_cpg_all'), mgmt),
+        mapping = aes(color = mgmt), upper = list(continuous = wrap("cor", size = 3)),
+        lower = list(continuous = wrap("smooth", method = "lm", se = F,
+                                               alpha = 0.6)))+
+  custom_theme() + labs(title = 'Comparing Mean Bankfull Width with Potential Covariates')
 ```
 
 Looks like `fac_taudem_17all_int`, `us_precip_1981_2010_cpg_all`, `clay_100_cpg_all`, `slope_percent_int_cpg_all` and `us_tmax_1981_2010_int_cpg_all` for `mean_bf` and
@@ -140,6 +144,7 @@ mod_bf <- lm(log(mean_bf)~log(fac_taudem_17all_int)+
                log(swe_avg_0301_cpg_all) +
                log(clay_100_cpg_all)+
                log(slope_percent_int_cpg_all)+
+               MAP_UNIT_N + 
                mgmt, data = gr_95)
 car::vif(mod_bf)
 
@@ -152,6 +157,7 @@ mod_bank <- lm(log(mean_bank_an)~log(fac_taudem_17all_int)+
                  log(streamslope_percent_int_cpg_all) +
                  log(silt_100_cpg_all) +
                  log(twi_100_int_cpg_all) +
+                 MAP_UNIT_N +
                  mgmt, data = gr_95)
 car::vif(mod_bank)
 
@@ -172,48 +178,82 @@ managed area or reference; it just happens.
 
 ## Models
 
-We'll run the models for ANCOVA below for both dv's.
+We'll run the models for ANCOVA below for both dv's. We want the most parsimonous model so we'll use AIC to gain information about the simplest model; managing under-over fitting.
 
 ```{r}
 
-#for mean_bf
+set.seed(123)
+library(caret)
+library(CAST)
+
+gr_95_bss <- gr_95 %>% select(mean_bf, fac_taudem_17all_int,
+                              us_precip_1981_2010_cpg_all, us_tmax_1981_2010_int_cpg_all,
+                              swe_avg_0301_cpg_all, clay_100_cpg_all, slope_percent_int_cpg_all,
+                              MAP_UNIT_N) %>% 
+             mutate(across(1:7, ~log(.)))
+
+set.seed(1234)
+indicesBlock <- CreateSpacetimeFolds(gr_95_bss, spacevar = "MAP_UNIT_N", k = 6)
+
+
+# Set up repeated k-fold cross-validation
+train.control <- caret::trainControl(method = "cv",
+                                     index = indicesBlock$index,
+                                       returnResamp = "all",
+                                       savePredictions = 'all')
+
+# Train the model
+set.seed(136564)
+aic_model <- train(gr_95_bss[,2:7],
+                       gr_95_bss$mean_bf,
+                        method = "lmStepAIC",
+                        direction = 'backward',
+                        trControl = train.control,
+                       
+                    )
+summary(aic_model$finalModel)
+
 mod_bf <- lm(log(mean_bf)~log(fac_taudem_17all_int)+
                log(us_precip_1981_2010_cpg_all)+
                log(us_tmax_1981_2010_int_cpg_all) +
-               log(swe_avg_0301_cpg_all) +
-               log(clay_100_cpg_all)+
-               log(slope_percent_int_cpg_all)+
+               log(slope_percent_int_cpg_all) + 
                MAP_UNIT_N +
                mgmt, data = gr_95)
 Anova(mod_bf, type = 'III')
 
-#update
+gr_95_bss <- gr_95 %>% select(mean_bank_an, fac_taudem_17all_int,
+                              ave_basin_elev, streamslope_percent_int_cpg_all,
+                              silt_100_cpg_all, twi_100_int_cpg_all,
+                              MAP_UNIT_N) %>% 
+             mutate(across(1:6, ~log(.)))
 
-mod_bf <- lm(log(mean_bf)~log(fac_taudem_17all_int)+
-               log(us_precip_1981_2010_cpg_all)+
-               log(slope_percent_int_cpg_all)+
-               MAP_UNIT_N +
-               mgmt, data = gr_95)
-Anova(mod_bf, type = 'III')
+set.seed(1234)
+indicesBlock <- CreateSpacetimeFolds(gr_95_bss, spacevar = "MAP_UNIT_N", k = 6)
 
 
+# Set up repeated k-fold cross-validation
+train.control <- caret::trainControl(method = "cv",
+                                     index = indicesBlock$index,
+                                       returnResamp = "all",
+                                       savePredictions = 'all')
+
+# Train the model
+set.seed(136564)
+aic_model_ba <- train(gr_95_bss[,2:6],
+                       gr_95_bss$mean_bank_an,
+                        method = "lmStepAIC",
+                        direction = 'backward',
+                        trControl = train.control,
+                       
+                    )
+summary(aic_model_ba)
 #for mean_bank_an
 mod_bank <- lm(log(mean_bank_an)~log(fac_taudem_17all_int)+
                  log(ave_basin_elev)+
-                 log(streamslope_percent_int_cpg_all) +
-                 log(silt_100_cpg_all) +
                  log(twi_100_int_cpg_all) +
                  MAP_UNIT_N +
                  mgmt, 
                  data = gr_95)
-Anova(mod_bank, type = 'III')
-
-#update
-mod_bank <- lm(log(mean_bank_an)~log(fac_taudem_17all_int)+
-                 log(ave_basin_elev)+
-                 log(twi_100_int_cpg_all) +
-                 MAP_UNIT_N +
-                 mgmt, data = gr_95)
 Anova(mod_bank, type = 'III')
 
 ```
@@ -251,56 +291,6 @@ plot(mod_bank)
 plot(mod_bf)
 ```
 
-As you can see we have some high positive residuals that are long in
-tails.
-
-Let's look at the spatial part of the residuals and see if there is
-something going on.
-
-```{r}
-pibo_sites$residuals <- mod_bf$residuals
-
-mt <- AOI::aoi_get(state = "MT")
-id <- AOI::aoi_get(state = "ID")
-mt_id <- bind_rows(mt, id)
-
-ggplot() + 
-  geom_sf(data = mt_id, fill = NA, alpha = 0) + 
-  geom_sf(data = pibo_sites, aes(color = residuals), size = 2.75)+
-  scale_color_gradientn(colors = wesanderson::wes_palette('Zissou1')) +
-  theme_void(base_size = 16) + coord_sf(xlim = c(-117,-112), ylim = c(49.1, 45)) +labs(color = 'Residuals',                                                                       title = 'Maps showing model residuals for Y = 	&beta;<sub>0</sub> + 	&beta;<sub>1</sub>*Precipitation (mm) + &beta;<sub>2</sub>*Watershed Area (km<sup>2</sup>) + &beta;<sub>3</sub>*Group<br>') +facet_wrap(~mgmt) +
-  theme(plot.title = element_markdown(size = 12))
-
-
-```
-
-I think just taking out the location `r gr_95[75,]$stream`.
-
-```{r}
-#now let's do the qqPlot() without these
-
-mod_bf_filt <- lm(log(mean_bf)~log(fac_taudem_17all_int)+
-               log(us_precip_1981_2010_cpg_all)+
-               log(slope_percent_int_cpg_all)+
-               MAP_UNIT_N +
-               mgmt, data = gr_95)
-gr_95$residuals <- mod_bf_filt$residuals
-mod_bf_filt <- lm(log(mean_bf)~log(shed_areakm2)+log(ave_annual_precip)+mgmt, data = gr_95[-c(75, 193, 276),])
-qqPlot(mod_bf_filt)
-check_normality(mod_bf_filt)
-```
-
-Now check the assumptions of the model.
-
-```{r}
-check_normality(mod_bf_filt)
-#normal
-
-check_heteroscedasticity(mod_bf_filt)
-#homoscedastic
-```
-
-Better. But should we do this... Well let's see what happens.
 
 Now we need to see if the regression lines are homogeneous.
 
@@ -311,32 +301,99 @@ violated the assumption.
 
 ```{r}
 
-mod_bf_precip <- lm(log(mean_bf)~mgmt*log(us_precip_1981_2010_cpg_all), data = gr_95)
+mod_bf_precip <- lm(log(mean_bf)~mgmt*log(us_precip_1981_2010_cpg_all), data = gr_95[-c(75,193), ], weights = wt[-c(75,193)])
 summary(mod_bf_precip)
 #passed
 
-mod_bf_shed <- lm(log(mean_bf)~mgmt*log(fac_taudem_17all_int), data = gr_95)
+mod_bf_shed <- lm(log(mean_bf)~mgmt*log(fac_taudem_17all_int), data = gr_95[-c(75,193), ], weights = wt[-c(75,193)])
 summary(mod_bf_shed)
 #passed 
 
-mod_bf_slope <- lm(log(mean_bf)~mgmt*log(slope_percent_int_cpg_all), data = gr_95)
+mod_bf_slope <- lm(log(mean_bf)~mgmt*log(slope_percent_int_cpg_all), data = gr_95[-c(75,193), ], weights = wt[-c(75,193)])
 summary(mod_bf_slope)
 #passed 
 
+mod_bf_temp <- lm(log(mean_bf)~mgmt*log(us_tmax_1981_2010_int_cpg_all), data = gr_95[-c(75,193), ], weights = wt[-c(75,193)])
+summary(mod_bf_temp)
+#passed 
 
-mod_ba_elev <- lm(log(mean_bank_an)~mgmt*log(ave_basin_elev), data = gr_95)
+
+mod_ba_elev <- lm(log(mean_bank_an)~mgmt*log(ave_basin_elev), data = gr_95, weights = wt_ba)
 summary(mod_ba_elev)
 #passed
 
-mod_ba_twi <- lm(log(mean_bank_an)~mgmt*log(twi_100_int_cpg_all), data = gr_95)
+mod_ba_twi <- lm(log(mean_bank_an)~mgmt*log(twi_100_int_cpg_all), data = gr_95, weights = wt_ba)
 summary(mod_ba_twi)
 
 #passed
-mod_ba_shed <- lm(log(mean_bank_an)~mgmt*log(fac_taudem_17all_int), data = gr_95)
+mod_ba_shed <- lm(log(mean_bank_an)~mgmt*log(fac_taudem_17all_int), data = gr_95, weights = wt_ba)
 summary(mod_ba_shed)
 #passed
 
+mod_ba_silt<- lm(log(mean_bank_an)~mgmt*log(silt_100_cpg_all), data = gr_95, weights = wt_ba)
+summary(mod_ba_silt)
+#passed
+
 ```
+
+```{r}
+#now let's do the qqPlot() without these
+
+mod_bf_filt <- lm(log(mean_bf)~log(fac_taudem_17all_int)+
+               log(us_precip_1981_2010_cpg_all)+
+               log(us_tmax_1981_2010_int_cpg_all) +
+               log(slope_percent_int_cpg_all) + 
+               MAP_UNIT_N +
+               mgmt, data = gr_95)
+wt <- 1 / lm(abs(mod_bf_filt$residuals) ~ mod_bf_filt$fitted.values)$fitted.values^2
+qqPlot(mod_bf_filt)
+
+mod_bf_filt <- lm(log(mean_bf)~log(fac_taudem_17all_int)+
+               log(us_precip_1981_2010_cpg_all)+
+               log(us_tmax_1981_2010_int_cpg_all) +
+               log(slope_percent_int_cpg_all) + 
+               MAP_UNIT_N +
+               mgmt, data = gr_95[-c(75,193), ], weights = wt[-c(75,193)])
+
+mod_ba_filt <- lm(log(mean_bank_an)~log(fac_taudem_17all_int)+
+                 log(ave_basin_elev)+
+                 log(twi_100_int_cpg_all) +
+                 MAP_UNIT_N +
+                 mgmt, 
+                 data = gr_95)
+
+#don't square the weighted residuals
+wt_ba <- 1 / lm(abs(mod_ba_filt$residuals) ~ mod_ba_filt$fitted.values)$fitted.values
+qqPlot(mod_ba_filt)
+
+mod_ba_filt <- lm(log(mean_bank_an)~log(fac_taudem_17all_int)+
+                 log(ave_basin_elev)+
+                 log(twi_100_int_cpg_all) +
+                 MAP_UNIT_N +
+                 mgmt, 
+                 data = gr_95,
+                 weights = wt_ba)
+```
+
+Now check the assumptions of the model.
+
+```{r}
+check_normality(mod_bf_filt)
+#normal
+
+check_heteroscedasticity(mod_bf_filt)
+#homoscedastic
+
+check_normality(mod_ba_filt)
+#normal
+
+check_heteroscedasticity(mod_ba_filt)
+#homoscedastic
+
+
+
+```
+
 
 ## Run the final models
 
@@ -344,28 +401,103 @@ summary(mod_ba_shed)
 #for mean_bf filter out high residuals
 mod_bf_filt <- lm(log(mean_bf)~log(fac_taudem_17all_int)+
                log(us_precip_1981_2010_cpg_all)+
-               log(slope_percent_int_cpg_all)+
+               log(us_tmax_1981_2010_int_cpg_all) +
+               log(slope_percent_int_cpg_all) + 
                MAP_UNIT_N +
-               mgmt, 
-               data =gr_95[-c(75, 193, 276),])
+               mgmt, data = gr_95[-c(75,193), ], weights = wt[-c(75,193)])
 
 Anova(mod_bf_filt, type = 'III')
 summary(mod_bf_filt)
 #for mean_bf WITHOUT filtering high residuals
 mod_bf <- lm(log(mean_bf)~log(fac_taudem_17all_int)+
                log(us_precip_1981_2010_cpg_all)+
-                log(slope_percent_int_cpg_all)+
-                 MAP_UNIT_N +
+               log(us_tmax_1981_2010_int_cpg_all) +
+               log(slope_percent_int_cpg_all) + 
+               MAP_UNIT_N +
                  mgmt, data = gr_95)
-Anova(mod_bf, type = 'III')
+car::Anova(mod_bf, type = 'III')
+library(gtsummary)
+library(gt)
+
+la <- list(`log(fac_taudem_17all_int)`~"log(FA Catchment Area)",
+               `log(us_precip_1981_2010_cpg_all)`~"log(FA Average Annual Precipitation)",
+               `log(us_tmax_1981_2010_int_cpg_all)`~"log(FA Temperature Max)",
+               `log(slope_percent_int_cpg_all)`~"log(FA Basin Slope %)",
+               MAP_UNIT_N~"Blocking Factor",
+               mgmt~"Indpendent Variable")
+
+tb_bf_filt <- tbl_regression(mod_bf_filt, label = la, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2))%>% 
+  add_global_p() %>%
+  bold_p(t = 0.05) %>%
+  bold_labels() %>%
+  italicize_levels()
+
+tb_bf <- tbl_regression(mod_bf, label = la, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2))%>% 
+  add_global_p() %>%
+  bold_p(t = 0.05) %>%
+  bold_labels() %>%
+  italicize_levels()
+
+
 #for mean bank angle
 mod_bank <- lm(log(mean_bank_an)~log(fac_taudem_17all_int)+
                  log(ave_basin_elev)+
                  log(twi_100_int_cpg_all) +
                  MAP_UNIT_N +
-                 mgmt, data = gr_95)
-summary(mod_bank)
-Anova(mod_bank, type = 'III')
+                 mgmt, 
+                 data = gr_95)
+mod_ba_filt <- lm(log(mean_bank_an)~log(fac_taudem_17all_int)+
+                 log(ave_basin_elev)+
+                 log(twi_100_int_cpg_all) +
+                 MAP_UNIT_N +
+                 mgmt, 
+                 data = gr_95,
+                 weights = wt_ba)
+
+la_ba <- list(`log(fac_taudem_17all_int)`~"log(FA Catchment Area)",
+               `log(ave_basin_elev)`~"log(Mean Basin Elevation)",
+               `log(twi_100_int_cpg_all)`~"log(FA TWI)",
+               MAP_UNIT_N~"Blocking Factor",
+               mgmt~"Indpendent Variable")
+
+tb_ba_filt <- tbl_regression(mod_ba_filt, label = la_ba, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2))%>% 
+  add_global_p() %>%
+  bold_p(t = 0.05) %>%
+  bold_labels() %>%
+  italicize_levels()
+
+tb_ba <- tbl_regression(mod_bank, label = la_ba, 
+    pvalue_fun = ~style_pvalue(.x, digits = 2))%>% 
+  add_global_p() %>%
+  bold_p(t = 0.05) %>%
+  bold_labels() %>%
+  italicize_levels()
+
+
+# merge tables 
+tbl_merge_ex1 <-
+  tbl_merge(
+    tbls = list(tb_bf, tb_bf_filt, tb_ba, tb_ba_filt),
+    tab_spanner = c("**Full Dataset Bankfull**","**Robust Adjusted Bankfull**", "**Full Dataset Bank Angle**", "**Robust Ajusted Bank Angle**")
+  )
+
+
+tbl_merge_ex1 %>% 
+  as_gt() %>% 
+   tab_header(
+    title = "Model Results for multivariate ANCOVA",
+    subtitle = "These include both DVs"
+  ) %>% 
+  opt_align_table_header(align = 'left') %>% 
+  tab_source_note(md("**Table 3.**")) %>% 
+  tab_footnote(footnote = 'sites not included in the model: Calf Creek (Ref) and S.F. Pilgrim (Man)',
+               locations = cells_column_spanners('**Robust Adjusted Bankfull**'))%>% 
+  tab_footnote(footnote = 'weighted methods applied',
+               locations = cells_column_spanners(c('**Robust Adjusted Bankfull**', "**Robust Ajusted Bank Angle**")))
+
 
 ```
 
@@ -377,6 +509,134 @@ confidence intervals to see how the groups compare.
 ```{r}
 library(emmeans)
 library(car)
+library(gt)
+
+mgmt_diff <- emmeans::emmeans(mod_bf_filt, specs = 'mgmt')
+
+mgmt_diff <- plot(mgmt_diff) + custom_theme()
+
+mgmt_diff_gg <- as.data.frame(mgmt_diff$data) %>% tibble()
+
+#get mean difference between groups
+
+mgmt_diff_gg %>% select(-pri.fac, -lcl, -ucl, -df) %>% 
+                        mutate(
+                        the.emmean = exp(the.emmean),
+                        lower.CL = exp(lower.CL),
+                        upper.CL = exp(upper.CL)) %>%
+                        mutate(across(is.numeric, round, 5)) %>% 
+                        rename(IV = 'mgmt',
+                               `EMM` = 'the.emmean',
+                               `Standard Error` = 'SE',
+                               `Lower 95% CL` = 'lower.CL',
+                               `Upper 95% CL` = 'upper.CL')  %>% 
+                        gt() %>%
+  tab_header(
+    title = "Estimated Marginal Mean (EMM) Results"
+  )
+
+
+m1 <- mgmt_diff_gg %>% mutate(
+                        the.emmean = exp(the.emmean),
+                        lower.CL = exp(lower.CL),
+                        upper.CL = exp(upper.CL)) %>% filter(the.emmean >0) %>% 
+  ggplot() +
+  geom_errorbar(aes(the.emmean, mgmt, color=mgmt,xmin = lower.CL, xmax = upper.CL), size = 2,
+                show.legend = F, width = 0.5) +
+  geom_point(aes(the.emmean, mgmt), size = 5) +
+  custom_theme(font_size = 15) + 
+  labs(x = 'Predicted Mean Bankfull Width (m)', y = '')
+
+m1 
+
+mgmtArea_diff <- emmeans::emmeans(mod_bf_filt, specs = 'mgmt', by = 'MAP_UNIT_N')
+mgmt_diff <- plot(mgmtArea_diff) + custom_theme()
+
+mgmt_diff_gg <- as.data.frame(mgmt_diff$data) %>% tibble()
+
+m2 <- mgmt_diff_gg %>% mutate(
+                        the.emmean = exp(the.emmean),
+                        lower.CL = exp(lower.CL),
+                        upper.CL = exp(upper.CL)) %>% filter(the.emmean >0) %>% 
+  ggplot() +
+  geom_errorbar(aes(the.emmean, mgmt, color=mgmt,xmin = lower.CL, xmax = upper.CL),
+                width = 0.5, 
+                size = 2,
+                show.legend = F) +
+  geom_point(aes(the.emmean, mgmt), size = 2) +
+  custom_theme(font_size = 15) + 
+  labs(x = 'Predicted Mean Bankfull Width (m)', y = '') +
+  theme(axis.text.y = element_blank(),
+        axis.line.y = element_blank(),
+        axis.ticks.y = element_blank()) +
+  facet_wrap(~MAP_UNIT_N)
+
+library(patchwork)
+
+mgmt_diff <- emmeans::emmeans(mod_ba_filt, specs = 'mgmt')
+
+mgmt_diff <- plot(mgmt_diff) + custom_theme()
+
+mgmt_diff_gg <- as.data.frame(mgmt_diff$data) %>% tibble()
+
+#get mean difference between groups
+
+mgmt_diff_gg %>% select(-pri.fac, -lcl, -ucl, -df) %>% 
+                        mutate(
+                        the.emmean = exp(the.emmean),
+                        lower.CL = exp(lower.CL),
+                        upper.CL = exp(upper.CL)) %>%
+                        mutate(across(is.numeric, round, 5)) %>% 
+                        rename(IV = 'mgmt',
+                               `EMM` = 'the.emmean',
+                               `Standard Error` = 'SE',
+                               `Lower 95% CL` = 'lower.CL',
+                               `Upper 95% CL` = 'upper.CL')  %>% 
+                        gt() %>%
+  tab_header(
+    title = "Estimated Marginal Mean (EMM) Results"
+  )
+
+
+m3 <- mgmt_diff_gg %>% mutate(
+                        the.emmean = exp(the.emmean),
+                        lower.CL = exp(lower.CL),
+                        upper.CL = exp(upper.CL)) %>% filter(the.emmean >0) %>% 
+  ggplot() +
+  geom_errorbar(aes(the.emmean, mgmt, color=mgmt,xmin = lower.CL, xmax = upper.CL), size = 2,
+                show.legend = F, width = 0.5) +
+  geom_point(aes(the.emmean, mgmt), size = 5) +
+  custom_theme(font_size = 15) + 
+  labs(x = 'Predicted Mean Bank Angle (deg)', y = '')
+
+m1 
+
+mgmtArea_diff <- emmeans::emmeans(mod_ba_filt, specs = 'mgmt', by = 'MAP_UNIT_N')
+mgmt_diff <- plot(mgmtArea_diff) + custom_theme()
+
+mgmt_diff_gg <- as.data.frame(mgmt_diff$data) %>% tibble()
+
+m4 <- mgmt_diff_gg %>% mutate(
+                        the.emmean = exp(the.emmean),
+                        lower.CL = exp(lower.CL),
+                        upper.CL = exp(upper.CL)) %>% filter(the.emmean >0) %>% 
+  ggplot() +
+  geom_errorbar(aes(the.emmean, mgmt, color=mgmt,xmin = lower.CL, xmax = upper.CL),
+                width = 0.5, 
+                size = 2,
+                show.legend = F) +
+  geom_point(aes(the.emmean, mgmt), size = 2) +
+  custom_theme(font_size = 15) + 
+  labs(x = 'Predicted Mean Bank Angle (deg)', y = '') +
+  theme(axis.text.y = element_blank(),
+        axis.line.y = element_blank(),
+        axis.ticks.y = element_blank()) +
+  facet_wrap(~MAP_UNIT_N)
+
+
+((m1 + labs(title = 'a)'))|(m2 + labs(title = 'b)')))/
+((m3 + labs(title = 'c)'))|(m4 + labs(title = 'd)')))
+
 
 bf.rg <- ref_grid(mod_bf_filt, at = list(fac_taudem_17all_int = seq(10000, 163291, 16329.1)))
 
@@ -394,18 +654,44 @@ p1 <- emm_gg %>% mutate(shed_area = ifelse(mgmt %in% 'Reference', fac_taudem_17a
   geom_errorbar(aes(the.emmean, fac_taudem_17all_int, color=mgmt,xmin = lower.CL, xmax = upper.CL),
   position = position_dodge2(width = 0.005, padding = 0.005), size = .75) + 
   custom_theme(font_size = 12) + labs(x = 'Predicted Mean Bankfull Width (m)', 
-                        y = 'Watershed Area km2',
+                        y = 'Flow Accumulated Area (30x30m res)',
                         color = "Group",
                         title = 'Comparing estimated means by Watershed Area (km<sup>2</sup>) (without high residuals)',
                         subtitle = 'Average annual precipitation is held constant at 1193 (mm)')  +
   geom_point(aes(the.emmean, shed_area), size = 1) +
+  scale_y_continuous(labels = comma) + 
+  facet_wrap(~MAP_UNIT_N)
+p1 
+
+df_pred <- data.frame(pred = predict(mod_bf_filt)) %>% mutate(pred_ex = exp(pred))
+bf.rg <- ref_grid(mod_bf_filt, at = list(us_precip_1981_2010_cpg_all = seq(10000, 163291, 16329.1)))
+
+emm <- plot(bf.rg, by = 'mgmt') + custom_theme()
+
+emm_gg <- as.data.frame(emm$data) %>% tibble()
+
+
+p1 <- emm_gg %>% mutate(shed_area = ifelse(mgmt %in% 'Reference', us_precip_1981_2010_cpg_all+4000, us_precip_1981_2010_cpg_all-4000),
+                        the.emmean = exp(the.emmean),
+                        lower.CL = exp(lower.CL),
+                        upper.CL = exp(upper.CL)) %>% filter(the.emmean >0) %>% 
+  ggplot() +
+  #geom_point(data = gr_95 , aes(mean_bf, shed_areakm2, color = mgmt), size = 3, alpha = 0.2)+
+  geom_errorbar(aes(the.emmean, us_precip_1981_2010_cpg_all, color=mgmt,xmin = lower.CL, xmax = upper.CL),
+  position = position_dodge2(width = 0.005, padding = 0.005), size = .75) + 
+  custom_theme(font_size = 12) + labs(x = 'Predicted Mean Bankfull Width (m)', 
+                        y = 'Flow Accumulated Area (30x30m res)',
+                        color = "Group",
+                        title = 'Comparing estimated means by Watershed Area (km<sup>2</sup>) (without high residuals)',
+                        subtitle = 'Average annual precipitation is held constant at 1193 (mm)')  +
+  geom_point(aes(the.emmean, shed_area), size = 1) +
+  scale_y_continuous(labels = comma) + 
   facet_wrap(~MAP_UNIT_N)
 p1 
 
 
 
-
-ba.rg <- ref_grid(mod_bank, at = list(fac_taudem_17all_int = seq(10000, 163291, 16329.1)))
+ba.rg <- ref_grid(mod_ba_filt, at = list(fac_taudem_17all_int = seq(10000, 163291, 16329.1)))
 
 emm <- plot(ba.rg, by = 'mgmt') + custom_theme()
 

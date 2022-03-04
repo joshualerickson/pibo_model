@@ -28,6 +28,7 @@ source('utils.R')
 library(jtools)
 library(robustlmm)
 library(lme4)
+library(gtsummary)
 
 ```
 
@@ -45,12 +46,29 @@ Get lmm for bankfull widths.
 lmm_bf <- lmer(log(bf) ~ 
                log(fac_taudem_17all_int)+
                log(us_precip_1981_2010_cpg_all)+
-               log(slope_percent_int_cpg_all) + 
+               log(slope_percent_int_cpg_all) +
+               log(us_tmax_1981_2010_int_cpg_all) +
                mgmt + 
                (1 | MAP_UNIT_N/site_id),
                gr_95_ts)
 
+la <- list(`log(fac_taudem_17all_int)`~"log(FA Catchment Area)",
+               `log(us_precip_1981_2010_cpg_all)`~"log(FA Average Annual Precipitation)",
+               `log(us_tmax_1981_2010_int_cpg_all)`~"log(FA Temperature Max)",
+               `log(slope_percent_int_cpg_all)`~"log(FA Basin Slope %)",
+               mgmt~"Indpendent Variable")
+
+tb_ba <- tbl_regression(lmm_bf,  label = la,
+    pvalue_fun = ~style_pvalue(.x, digits = 2))%>% 
+  add_global_p() %>%
+  bold_p(t = 0.05) %>%
+  bold_labels() %>%
+  italicize_levels()
+
+
 summ(lmm_bf, confint = T)
+summary(lmm_bf)
+lme4::vcov.merMod(lmm_bf)
 #ICC 0.65 for sites and ECO and 0.09 for ECO
 
 summary(lmm_bf)
@@ -67,11 +85,13 @@ rlmm_bf <- rlmer(log(bf) ~
                log(fac_taudem_17all_int)+
                log(us_precip_1981_2010_cpg_all)+
                log(slope_percent_int_cpg_all) + 
+               log(us_tmax_1981_2010_int_cpg_all) +
                mgmt + 
                (1 | MAP_UNIT_N/site_id),
                gr_95_ts)
 
-summary(rlmm_bf)
+summ(rlmm_bf, confint = TRUE)
+plot(rlmm_bf)
 
 # play with smoothing param to make sure the weighting is not too crazy....
 # default is 1.34
@@ -114,8 +134,6 @@ coefs.robust <- coef(summary(rlmm_bf))
 p.values <- 2*pt(abs(coefs.robust[,3]), coefs$d.f., lower=FALSE)
 round(p.values,4)
 
-
-
 ```
 
 
@@ -136,7 +154,7 @@ lmm_ba <- lmer(log(bank_angle)~
 summ(lmm_ba, confint = T)
 
 plot(lmm_ba)
-
+ggplot() + geom_density(aes(residuals(lmm_ba)))
 shapiro.test(residuals(lmm_ba))
 qqPlot(residuals(lmm_ba), col = 'red')
 
@@ -255,19 +273,21 @@ p1
 ## Look into harvest
 
 ```{r}
-lmm_bf_harv <- lmer(log(bf) ~ log(fac_taudem_17all_int)+
-               log(us_precip_1981_2010_cpg_all)+
-               log(slope_percent_int_cpg_all) + 
-                 harv_group + 
-                 (1 | MAP_UNIT_N/site_id),
-                 gr_95_ts %>% filter(mgmt == 'Managed'))
+lmm_bf_harv <- lmer(log(bf) ~ 
+                    log(fac_taudem_17all_int)+
+                    log(us_precip_1981_2010_cpg_all)+
+                    log(slope_percent_int_cpg_all) + 
+                    harv_group + 
+                    (1 | MAP_UNIT_N/site_id),
+                    gr_95_ts %>% filter(mgmt == 'Managed'))
 
-rlmm_bf_harv <- rlmer(log(bf) ~ log(fac_taudem_17all_int)+
-               log(us_precip_1981_2010_cpg_all)+
-               log(slope_percent_int_cpg_all) + 
-                 harv_group + 
-                 (1 | MAP_UNIT_N/site_id),
-                 gr_95_ts %>% filter(mgmt == 'Managed'))
+rlmm_bf_harv <- rlmer(log(bf) ~ 
+                    log(fac_taudem_17all_int)+
+                    log(us_precip_1981_2010_cpg_all)+
+                    log(slope_percent_int_cpg_all) + 
+                    harv_group + 
+                    (1 | MAP_UNIT_N/site_id),
+                    gr_95_ts %>% filter(mgmt == 'Managed'))
 
 summ(lmm_bf_harv, confint = T)
 summary(lmm_bf_harv)
@@ -284,6 +304,37 @@ coefs.robust <- coef(summary(rlmm_bf_harv))
 p.values <- 2*pt(abs(coefs.robust[,3]), coefs$d.f., lower=FALSE)
 round(p.values,4)
 
+
+lmm_ba_harv <- lmer(log(bank_angle)~
+                 log(fac_taudem_17all_int)+
+                 log(ave_basin_elev)+
+                 log(twi_100_int_cpg_all) + 
+                 harv_group + 
+                 (1 | MAP_UNIT_N/site_id),
+                 gr_95_ts %>% filter(mgmt == 'Managed'))
+
+summ(lmm_ba_harv)
+ranef(lmm_ba_harv)
+
+rlmm_ba_harv <- rlmer(log(bank_angle)~
+                 log(fac_taudem_17all_int)+
+                 log(ave_basin_elev)+
+                 log(twi_100_int_cpg_all) + 
+                 harv_group + 
+                 (1 | MAP_UNIT_N/site_id),
+                 gr_95_ts %>% filter(mgmt == 'Managed'))
+summary(rlmm_ba_harv)
+
+##### pvalues
+
+
+coefs <- as.data.frame(summ(lmm_bf_harv)$coeftable)
+
+# get coefficients from robust model to extract t-values
+coefs.robust <- coef(summary(rlmm_bf_harv))
+# calculate p-values based on robust t.values and non-robust approx. DFs
+p.values <- 2*pt(abs(coefs.robust[,3]), coefs$d.f., lower=FALSE)
+round(p.values,4)
 
 
 ```

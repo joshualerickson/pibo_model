@@ -44,10 +44,10 @@ library(lmerTest)
 #get means for bankfull width
 
 bf_means <- emmeans(rlmm_bf, specs = 'mgmt')
-m1 <- exp(2.14)
-m2 <- exp(2.17)
-sd1 <- exp(0.0351)
-sd2 <- exp(0.0370)
+m1 <- exp(2.12)
+m2 <- exp(2.15)
+sd1 <- exp(0.0306)
+sd2 <- exp(0.0325)
 
 TOSTtwo.raw(m1 = m1,
             m2 = m2, 
