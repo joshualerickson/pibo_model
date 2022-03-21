@@ -1,0 +1,37 @@
+name|type|data|command|depend|seed|path|time|size|bytes|format|iteration|parent|children|seconds|warnings|error
+pibo_over_time|stem|5a0dc5182823e39d|ce03de60b5774094|ef46db3751d8e999|-1992159438|data/gr_95_ts.csv|t19065.8084486889s|4a9bc61c71a8fc44|965152|file|vector|||0.84||
+ancova_data|stem|8cfa8991c2996944|5c869304f4c42483|ef46db3751d8e999|-1475617885|data/gr_95.csv|t19065.808584036s|331c04b0391e20fd|259409|file|vector|||0||
+raw_ancova_data|stem|8cfa8991c2996944|5c869304f4c42483|ef46db3751d8e999|814739170|data/gr_95.csv|t19065.808584036s|331c04b0391e20fd|259409|file|vector|||3.54|GDAL Error 1 Cant load requested DLL C\Program Files x86\GDAL\gdalplugins\gdal_netCDF.dll193 1 is not a valid Win32 application.|
+raw_pibo_over_time|stem|5a0dc5182823e39d|ce03de60b5774094|ef46db3751d8e999|-1368966932|data/gr_95_ts.csv|t19065.8084486889s|4a9bc61c71a8fc44|965152|file|vector|||0||
+data_ancova|stem|e6bf9ce4facb3afa|0f78f3a20fa1d250|1f7c0b12612529f1|-1385621904||t19065.8419655372s|597711143a6290ef|101842|rds|vector|||0.41||
+data_ts|stem|ed04e15da4ac7112|1b293c7df3603b38|93c4fd71b09d41e9|369003229||t19065.8419710087s|2e5e19f53cc5be72|183430|rds|vector|||0.33||
+cor_test_bf|stem|722c2a5eef4b6b18|ddd8d8cdc1ea4af8|fe20f087fa59a227|-1037998023||t19065.8419774845s|455780fb343ba4fe|2381|rds|vector|||0.44||
+bf_var_collinearity|stem|8f3435a2ea6f45bc|e9e5a126bd2ff8e3|39e26706c7a277ac|-496839032||t19065.8554866294s|fa4d074fee3f4d07|1304|rds|vector|||6.73|GDAL Error 1 Cant load requested DLL C\Program Files x86\GDAL\gdalplugins\gdal_netCDF.dll193 1 is not a valid Win32 application.|
+cor_test_ba|stem|f326d6b3f523bc07|29ef1ebe466cab4d|e89f069167b628d2|1499371169||t19065.8554889727s|0223b3da6adb1517|2372|rds|vector|||0.14||
+cor_test_wd|stem|dbeaa25cd581b61e|a42e39ac8e20f677|ea4225c6fd44a771|952217208||t19065.8554921982s|f135c8f4f5e9e9c4|2382|rds|vector|||0.21||
+variables_to_check_angle|stem|37e466731e2cb0e7|46067678aa36a0d4|26a5220fa0196ced|1616388260||t19065.8554935026s|a974a68cf58ff0c0|1332|rds|vector|||0.04||
+ba_var_collinearity|stem|643a488680a23240|59a73b130dd2f7db|39e26706c7a277ac|-1711679856||t19065.8595689517s|0485a732eca586c9|992|rds|vector|||3.77|GDAL Error 1 Cant load requested DLL C\Program Files x86\GDAL\gdalplugins\gdal_netCDF.dll193 1 is not a valid Win32 application.|
+wd_var_collinearity|stem|4ed0eb09f72cf561|bd8dc5ef5de3ecd2|39e26706c7a277ac|-1005346709||t19065.8595748964s|2e9c813d970c7726|1606|rds|vector|||0.43||
+variables_to_check_ba|stem|d7a3a483a997f5c7|090d74f43402a4c6|026445c3ffd01ed5|908431192||t19065.8597909254s|f960cceada7fe483|198|rds|vector|||3.5|GDAL Error 1 Cant load requested DLL C\Program Files x86\GDAL\gdalplugins\gdal_netCDF.dll193 1 is not a valid Win32 application.|
+variables_to_check_bf|stem|d7a3a483a997f5c7|e04114b4105bb11a|a781c88cd5ad9a11|1864237388||t19065.8597925538s|f960cceada7fe483|198|rds|vector|||0.05||
+cors_to_check_angle|stem|37e466731e2cb0e7|46067678aa36a0d4|26a5220fa0196ced|-487006444||t19065.8597933684s|a974a68cf58ff0c0|1332|rds|vector|||0.01||
+variables_to_check_wd|stem|d7a3a483a997f5c7|d091156cdc4bca9b|0898c49d341c729a|-1052921647||t19065.8597949967s|f960cceada7fe483|198|rds|vector|||0.04||
+cors_to_check_bf|stem|bc4f69481b45d5d6|cfceb77a23490dec|e835b7f09aa9afc5|96633212||t19065.8597958112s|032e6f94f7aeb16c|1612|rds|vector|||0.02||
+cors_to_check_wd|stem|b1c4ea8515ad162e|b6eab0c4aee9499b|ed230ea100ae9996|1559421818||t19065.859797673s|e5077b8fecc99589|1541|rds|vector|||0.03||
+correlations_to_bf|stem|722c2a5eef4b6b18|ddd8d8cdc1ea4af8|fe20f087fa59a227|1238313072||t19065.8653270053s|455780fb343ba4fe|2381|rds|vector|||3.71|GDAL Error 1 Cant load requested DLL C\Program Files x86\GDAL\gdalplugins\gdal_netCDF.dll193 1 is not a valid Win32 application.|
+correlations_to_wd|stem|dbeaa25cd581b61e|a42e39ac8e20f677|ea4225c6fd44a771|-1846911251||t19065.865330653s|f135c8f4f5e9e9c4|2382|rds|vector|||0.24||
+correlations_to_ba|stem|f326d6b3f523bc07|29ef1ebe466cab4d|e89f069167b628d2|-1919930379||t19065.8653344276s|0223b3da6adb1517|2372|rds|vector|||0.24||
+collinearity_to_check_ba|stem|d7a3a483a997f5c7|090d74f43402a4c6|026445c3ffd01ed5|1198291247||t19065.8653357666s|f960cceada7fe483|198|rds|vector|||0.08||
+correlations_to_check_bf|stem|bc4f69481b45d5d6|2ce410a69d617621|249031229c66c52b|-1822080247||t19065.8653366324s|032e6f94f7aeb16c|1612|rds|vector|||0.01||
+correlations_to_check_wd|stem|b1c4ea8515ad162e|779bab316416cd64|4668ebdc60e7bca0|1919574852||t19065.8653375097s|e5077b8fecc99589|1541|rds|vector|||0.01||
+collinearity_to_check_bf|stem|d7a3a483a997f5c7|e04114b4105bb11a|a781c88cd5ad9a11|-1016303315||t19065.8653386063s|f960cceada7fe483|198|rds|vector|||0.03||
+collinearity_to_check_wd|stem|d7a3a483a997f5c7|d091156cdc4bca9b|0898c49d341c729a|-555662978||t19065.8653403146s|f960cceada7fe483|198|rds|vector|||0.05||
+correlations_to_check_angle|stem|37e466731e2cb0e7|f76d00a0244a3e55|bb3bedc9070c45fb|1022428956||t19065.8653411458s|a974a68cf58ff0c0|1332|rds|vector|||0.01||
+mult_collin|function|d841004da3297aa5||||||||||||||
+cortest_cols|function|bd292c09aae548a0||||||||||||||
+filter_collinearity|function|1915dae61ff19c33||||||||||||||
+multi_collin|function|d841004da3297aa5||||||||||||||
+collinearity|function|57a2ef6bf55650c8||||||||||||||
+multcollinearity_wd|stem|3d41722a3f0dae13|c374a4a021428d92|00ab64c756234fac|1112679420||t19065.8715237617s|948059c0f0375919|436|rds|vector|||3.53|GDAL Error 1 Cant load requested DLL C\Program Files x86\GDAL\gdalplugins\gdal_netCDF.dll193 1 is not a valid Win32 application.|
+multcollinearity_ba|stem|6dba8543b98b8c1f|f4fdb1aed3facc7b|00ab64c756234fac|1641078570||t19065.8715249275s|6abf239ec780046d|373|rds|vector|||0||
+multcollinearity_bf|stem|9f27766fedb91578|af6a74a17e193b50|00ab64c756234fac|94512854||t19065.8715262088s|18b57449a454a2df|407|rds|vector|||0||
