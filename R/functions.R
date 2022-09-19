@@ -75,6 +75,11 @@ multi_collin <- function(data, type){
 
 linear_plot <- function(data, x, y, iv = NULL, log_y = NULL, log_x = NULL){
 
+<<<<<<< HEAD
+=======
+
+
+>>>>>>> 40d2944ea8bc2808f76beb1a26dd5a47566866ca
   if(is.null(iv)){
     mapping <- ggplot2::aes(.data[[x]], .data[[y]])
     r2 <- list(
@@ -91,6 +96,7 @@ linear_plot <- function(data, x, y, iv = NULL, log_y = NULL, log_x = NULL){
                            se = F)
     )
 
+<<<<<<< HEAD
 
   } else {
     mapping <- ggplot2::aes(.data[[x]], .data[[y]], color = .data[[iv]])
@@ -107,6 +113,15 @@ linear_plot <- function(data, x, y, iv = NULL, log_y = NULL, log_x = NULL){
                            linetype = "dashed",
                            se = F)
     )
+=======
+    mapping <- ggplot2::aes(.data[[x]], .data[[y]])
+    r2 <- Add_R2()
+
+  } else {
+
+    mapping <- ggplot2::aes(.data[[x]], .data[[y]], color = .data[[iv]])
+    r2 <- Add_R2()
+>>>>>>> 40d2944ea8bc2808f76beb1a26dd5a47566866ca
   }
 
   if(!is.null(log_y)){
@@ -131,43 +146,22 @@ linear_plot <- function(data, x, y, iv = NULL, log_y = NULL, log_x = NULL){
     logx
 }
 
-### from Anatolii at https://github.com/atsyplenkov/atslib/tree/master/R
-Add_R2 <- function(method = "lm",
-                   formula = y ~ x,
-                   add_line = T,
-                   lty = "dashed",
-                   conf_int = F,
-                   ...) {
 
-  if(add_line == TRUE){
+Add_R2 <- function(){
 
-
-      list(
-        ggpmisc::stat_poly_eq(aes(label =  paste(stat(eq.label),
-                                                 stat(rr.label),
-                                                 sep = "~~~~")),
-                              formula = formula,
-                              rr.digits = 2,
-                              # coef.digits = 2,
-                              parse = TRUE,
-                              ...),
-        ggplot2::geom_smooth(formula = formula,
-                             method = method,
-                             linetype = lty,
-                             se = conf_int)
-      )
-
-  } else {
-
+  list(
     ggpmisc::stat_poly_eq(aes(label =  paste(stat(eq.label),
                                              stat(rr.label),
                                              sep = "~~~~")),
-                          formula = formula,
+                          formula = y~x,
                           rr.digits = 2,
                           # coef.digits = 2,
-                          parse = TRUE,
-                          ...)
-  }
+                          parse = TRUE),
+    ggplot2::geom_smooth(formula = y~x,
+                         method = 'lm',
+                         linetype = 'dashed',
+                         se = F)
+  )
 }
 
 feature_selection <- function(data, type){
