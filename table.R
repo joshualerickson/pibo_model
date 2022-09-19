@@ -175,7 +175,7 @@ facet_covs %>%
                     axes = "all", remove_labels = "x",
                     strip  = strip_nested(bleed = TRUE))+
   scale_y_continuous(labels = scales::comma) +
-  custom_theme()+
+  custom_theme() +
   theme(
         strip.background = element_blank(),
         #strip.text = element_text(size = 18),

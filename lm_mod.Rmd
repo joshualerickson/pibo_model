@@ -11,14 +11,16 @@ library(tidyverse)
 library(broom)
 library(broom.mixed)
 library(sf)
-library(resourceviz)
-cairo_view()
-source('utils.R')
 library(jtools)
 library(robustlmm)
 library(lme4)
 library(gtsummary)
+library(sjPlot)
+library(gt)
+source('R/functions.R')
 
+gr_95_ts <- read_csv("data/gr_95_ts.csv")
+gr_95_ts <- gr_95_ts %>% rename(Site = "site_id", Year = "yr_change")
 ```
 
 ## Linear mixed models
@@ -29,28 +31,9 @@ Get lmm for bankfull widths.
 
 ## compare mods to see if what we need for slopes and intercepts
 
-#bring in covariates from ANCOVA
+#bring in covariates 
 
-lmm_bf_full <- lmer(log(bf) ~ 
-               log(fac_taudem_17all_int)+
-               log(us_precip_1981_2010_cpg_all)+
-               log(slope_percent_int_cpg_all) +
-               log(us_tmax_1981_2010_int_cpg_all) +
-               mgmt + 
-               (1 | MAP_UNIT_N/Site)+ 
-                 Year + 
-                 (Year|Site), 
-                 control = lmerControl(optimizer = 'Nelder_Mead'),
-               gr_95_ts %>% rename(Site = 'site_id',
-                                   Year = 'yr_change'))
-# all <- allFit(lmm_bf_full)
-# broom.mixed::glance(all) %>% select(optimizer, AIC, NLL_rel) %>%  arrange(NLL_rel)
-# broom.mixed::tidy(all, conf.int = TRUE) %>%  
-#   arrange(effect, term, estimate) %>%  
-#   select(-c(std.error, statistic)) %>% view()
-# 
-# aa_aug <- broom.mixed::augment(lmm_bf)
-
+# this is the simple model; varying intercept among sites only model 
 lmm_bf_simp <- lmer(log(bf) ~ 
                log(fac_taudem_17all_int)+
                log(us_precip_1981_2010_cpg_all)+
@@ -58,174 +41,56 @@ lmm_bf_simp <- lmer(log(bf) ~
                log(us_tmax_1981_2010_int_cpg_all) +
                mgmt + 
                (1 | Site), 
-               gr_95_ts%>% rename(Site = 'site_id', 
-                                   Year = 'yr_change'))
+               gr_95_ts)
+
+#this is the simple model but varying by year; correlated random slope and intercept model fixed by year 
 
 lmm_bf_simp_yr <- lmer(log(bf) ~ 
-               log(fac_taudem_17all_int)+
-               log(us_precip_1981_2010_cpg_all)+
+               log(fac_taudem_17all_int) +
+               log(us_precip_1981_2010_cpg_all) +
                log(slope_percent_int_cpg_all) +
                log(us_tmax_1981_2010_int_cpg_all) +
                mgmt + 
                  Year + 
                  (Year|Site), 
                  control = lmerControl(optimizer = 'bobyqa'),
-               gr_95_ts%>% rename(Site = 'site_id',
-                                   Year = 'yr_change'))
-
-anova(lmm_bf_full, lmm_bf_simp)
-anova(lmm_bf_simp_yr,lmm_bf_full)
-anova(lmm_bf_simp_yr, lmm_bf_simp)
-kableExtra::kable(summ(lmm_bf_full, confint = T, t.df = 'k-r'))
-gt(data.frame(summ(lmm_bf_simp, confint = T, t.df = 'k-r')$gvars))
-summ(lmm_bf_simp_yr, confint = T, t.df = 'k-r')
-summ(lmm_bf_full, confint = T, t.df = 'k-r')
-summ(lmm_bf_simp_yr)
-## Use the full nested model
-# 
-# 
-# la_c <- list(`log(fac_taudem_17all_int)`~"log(FA Catchment Area)",
-#                `log(us_precip_1981_2010_cpg_all)`~"log(FA Average Annual Precipitation)",
-#                `log(us_tmax_1981_2010_int_cpg_all)`~"log(FA Temperature Max)",
-#                `log(slope_percent_int_cpg_all)`~"log(FA Basin Slope %)",
-#                 yr_change ~'Year',
-#                mgmt~"Indpendent Variable")
-# 
-# tb_bf_c <- tbl_regression(lmm_bf_simp_yr,  label = la_c,
-#     pvalue_fun = ~style_pvalue(.x, digits = 2),
-#     intercept = TRUE)%>% 
-#   add_global_p() %>%
-#   bold_p(t = 0.05) %>%
-#   bold_labels() %>%
-#   add_glance_table(include = c('logLik',
-#                                'AIC',
-#                                'BIC',
-#                                'df.residual')) %>%
-#   italicize_levels()
-# la_ab <- list(`log(fac_taudem_17all_int)`~"log(FA Catchment Area)",
-#                `log(us_precip_1981_2010_cpg_all)`~"log(FA Average Annual Precipitation)",
-#                `log(us_tmax_1981_2010_int_cpg_all)`~"log(FA Temperature Max)",
-#                `log(slope_percent_int_cpg_all)`~"log(FA Basin Slope %)",
-#                mgmt~"Indpendent Variable")
-# tb_bf_a <- tbl_regression(lmm_bf_simp,  label = la_ab,
-#     pvalue_fun = ~style_pvalue(.x, digits = 2),
-#     intercept = TRUE)%>% 
-#   add_global_p() %>%
-#   bold_p(t = 0.05) %>%
-#   bold_labels() %>%
-#   add_glance_table(include = c('logLik',
-#                                'AIC',
-#                                'BIC',
-#                                'df.residual')) %>%
-#   italicize_levels() 
-# tb_bf_b <- tbl_regression(lmm_bf_full,  label = la_ab,
-#     pvalue_fun = ~style_pvalue(.x, digits = 2),
-#     intercept = TRUE)%>% 
-#   add_global_p() %>%
-#   bold_p(t = 0.05) %>%
-#   bold_labels() %>%
-#   add_glance_table(include = c('logLik',
-#                                'AIC',
-#                                'BIC',
-#                                'df.residual')) %>%
-#   italicize_levels()
-# 
-# # merge tables 
-# tbl_merge_ex1 <-
-#   tbl_merge(
-#     tbls = list(tb_bf_a, tb_bf_b, tb_bf_c),
-#     tab_spanner = c("**Model A**",
-#                     "**Model B**",
-#                     "**Model C**")
-#     )
-# 
-# tab_bf_lmm <- tbl_merge_ex1 %>% 
-#   as_gt()
-# bf_final_tab <- tab_bf_lmm%>% 
-#    tab_header(
-#     title = "Model Results Bankfull Width LMER"
-#   )  %>%
-#   tab_options(
-#     table.border.top.style = "hidden",
-#     table.border.bottom.style = "hidden"
-#   )
-
-library(sjPlot)
-
-tab_model(lmm_bf_full, lmm_bf_simp, lmm_bf_simp_yr,
-               df.method = 'kr',pred.labels = c(`log(fac_taudem_17all_int)`="log(FA Catchment Area)",
-               `log(us_precip_1981_2010_cpg_all)`="log(FA Average Annual Precipitation)",
-               `log(us_tmax_1981_2010_int_cpg_all)`="log(FA Temperature Max)",
-               `log(slope_percent_int_cpg_all)`="log(FA Basin Slope %)",
-               mgmtReference = "Indpendent Variable"),
-            dv.labels = c("Model A", "Model B", "Model C"), 
-            title = 'Bankfull Width', file = 'tab_model_bf.html')
-
-summary(lmm_bf_full)
-
-plot(lmm_bf_full)
-
-shapiro.test(residuals(lmm_bf_full))
-
-qqPlot(residuals(lmm_bf_full))
-
-# Run robust lmer because of the long tails in qq
-
-rlmm_bf <- rlmer(log(bf) ~ 
-               log(fac_taudem_17all_int)+
-               log(us_precip_1981_2010_cpg_all)+
-               log(slope_percent_int_cpg_all) +
-               log(us_tmax_1981_2010_int_cpg_all) +
-               mgmt + 
-               yr_change + 
-               (yr_change|site_id), REML = F,
                gr_95_ts)
 
-summ(rlmm_bf, confint = TRUE)
-plot(rlmm_bf)
+# finding the chi square 
+anova(lmm_bf_simp_yr, lmm_bf_simp)
 
-# play with smoothing param to make sure the weighting is not too crazy....
-# default is 1.34
+#best model was the simple model by year
 
-rlmm_list <- list() 
+# getting summary; ICC, p values, fixed/random effects
+# using the Kenward-Roger method.
 
-for(i in seq(0.5, 3, .25)){
-  
-  rsb <- list(psi2propII(smoothPsi, k = i), psi2propII(smoothPsi, k = i+1.5))
-  rlmm_bf_it <- update(rlmm_bf, rho.sigma.b = rsb)
-  
-  rlmm_list <- append(rlmm_list, rlmm_bf_it)
-}
+summ(lmm_bf_simp_yr, confint = T, t.df = 'k-r')
+summ(lmm_bf_simp, confint = T, t.df = 'k-r')
 
-rlmm_smooth_res <- compare(rlmm_bf,
-                           rlmm_list[[1]],
-                           rlmm_list[[2]],
-                           rlmm_list[[3]],
-                           rlmm_list[[4]],
-                           rlmm_list[[5]],
-                           rlmm_list[[6]],
-                           rlmm_list[[7]],
-                           rlmm_list[[8]],
-                           rlmm_list[[9]],
-                           rlmm_list[[10]],
-                           rlmm_list[[11]],
-                           show.rho.functions = FALSE)
+#get precise icc
+performance::icc(lmm_bf_simp)
+performance::icc(lmm_bf_simp_yr)
 
-rlmm_smooth_res
+#table for appendix
 
-### default looks good
-# little 
-##### pvalues
+sjPlot::tab_model(lmm_bf_simp, lmm_bf_simp_yr,
+               df.method = 'kr',pred.labels = c(`log(fac_taudem_17all_int)`="log(FA Catchment Area)",
+               `us_precip_1981_2010_cpg_all`="FA Average Annual Precipitation",
+               `us_tmax_1981_2010_int_cpg_all`="FA Temperature Max",
+               `slope_percent_int_cpg_all`="FA Basin Slope %",
+               mgmtReference = "Indpendent Variable"),
+            dv.labels = c("Model A", "Model B"), 
+            title = 'Bankfull Width', file = 'tab_model_bf.html')
 
-coefs <- as.data.frame(summ(lmm_bf_simp_yr)$coeftable)
+shapiro.test(residuals(lmm_bf_simp_yr))
 
-# get coefficients from robust model to extract t-values
-coefs.robust <- coef(summary(rlmm_bf))
-# calculate p-values based on robust t.values and non-robust approx. DFs
-p.values <- 2*pt(abs(coefs.robust[,3]), coefs$d.f., lower=FALSE)
-round(p.values,4)
+car::qqPlot(residuals(lmm_bf_simp_yr))
 
-summary(rlmm_bf)
+plot(lmm_bf_simp_yr)
+
+performance::check_heteroscedasticity(lmm_bf_simp_yr)
+
+
 ```
 
 
@@ -234,22 +99,12 @@ Now for bank angle.
 ```{r}
 
 
-
-
-lmm_ba_full <- lmer(log(bank_angle)~ 
-                 log(fac_taudem_17all_int)+
-                 log(ave_basin_elev)+
-                 log(twi_100_int_cpg_all) + 
-                 mgmt + 
-                 (1 | MAP_UNIT_N/site_id), REML = F,
-                 gr_95_ts)
-
 lmm_ba_simp <- lmer(log(bank_angle)~ 
                  log(fac_taudem_17all_int)+
                  log(ave_basin_elev)+
                  log(twi_100_int_cpg_all) + 
                  mgmt + 
-                 (1 | site_id), REML = F,
+                 (1 | Site), REML = T,
                  gr_95_ts)
 
 lmm_ba_simp_yr <- lmer(log(bank_angle)~ 
@@ -257,8 +112,8 @@ lmm_ba_simp_yr <- lmer(log(bank_angle)~
                  log(ave_basin_elev)+
                  log(twi_100_int_cpg_all) + 
                  mgmt + 
-                 yr_change + 
-                 (yr_change|site_id), REML = F,
+                 Year + 
+                 (Year|Site), REML = T,
                  control = lmerControl(optimizer = 'bobyqa'),
                  gr_95_ts)
 
@@ -274,84 +129,39 @@ aa_aug <- broom.mixed::augment(lmm_bf)
 
 summ(lmm_ba_simp_yr, confint = T, t.df = 'k-r')
 summ(lmm_ba_simp, confint = T, t.df = 'k-r')
-summ(lmm_ba_full, confint = T, t.df = 'k-r')
 
-anova(lmm_ba_full, lmm_ba_simp)
-anova(lmm_ba_simp_yr,lmm_ba_full)
-anova(lmm_ba_simp, lmm_ba_simp_yr)
+#precise icc
+performance::icc(lmm_ba_simp_yr)
+performance::icc(lmm_ba_simp)
 
-## best model was the lmm_ba_full because of complexity of lmm_ba_simp_yr
+anova(lmm_ba_simp_yr,lmm_ba_simp)
 
-plot(lmm_ba_full)
-ggplot() + geom_density(aes(residuals(lmm_ba_full)))
-shapiro.test(residuals(lmm_ba_full))
-qqPlot(residuals(lmm_ba_full), col = 'red')
+## best model was the lmm_ba_simp_yr
+
+plot(lmm_ba_simp_yr)
+ggplot() + geom_density(aes(residuals(lmm_ba_simp_yr)))
+shapiro.test(residuals(lmm_ba_simp_yr))
+performance::check_heteroscedasticity(lmm_ba_simp_yr)
+car::qqPlot(residuals(lmm_ba_simp_yr), col = 'red')
 
 #not too bad with outliers (when compared to bankfull). 
 # still do robust analysis
 
-#rlmmr bank angle
 
-rlmm_ba <- rlmer(log(bank_angle)~
-                 log(fac_taudem_17all_int)+
-                 log(ave_basin_elev)+
-                 log(twi_100_int_cpg_all) + 
-                 mgmt + 
-                 (1 | MAP_UNIT_N/site_id),
-                 gr_95_ts)
+tab_model(lmm_ba_simp, lmm_ba_simp_yr,
+               df.method = 'kr',pred.labels = c(`log(fac_taudem_17all_int)`="log(FA Catchment Area)",
+               `log(ave_basin_elev)`="log(Mean Basin Elevation)",
+               `log(twi_100_int_cpg_all)`="log(FA TWI)",
+               mgmtReference = "Indpendent Variable"),
+            dv.labels = c("Model A", "Model B"), 
+            title = 'Bank Angle', file = 'tab_model_ba.html')
 
-rlmm_list <- list() 
-
-for(i in seq(0.5, 3, .25)){
-  
-  rsb <- list(psi2propII(smoothPsi, k = i), psi2propII(smoothPsi, k = i+1.5))
-  rlmm_bf_it <- update(rlmm_ba, rho.sigma.b = rsb)
-  
-  rlmm_list <- append(rlmm_list, rlmm_bf_it)
-}
-
-rlmm_smooth_res <- compare(rlmm_ba,
-                           rlmm_list[[1]],
-                           rlmm_list[[2]],
-                           rlmm_list[[3]],
-                           rlmm_list[[4]],
-                           rlmm_list[[5]],
-                           rlmm_list[[6]],
-                           rlmm_list[[7]],
-                           rlmm_list[[8]],
-                           rlmm_list[[9]],
-                           rlmm_list[[10]],
-                           rlmm_list[[11]],
-                           show.rho.functions = FALSE)
-
-rlmm_smooth_res
-
-### looks good with default
-##### pvalues
-
-
-coefs <- as.data.frame(summ(lmm_ba)$coeftable)
-
-# get coefficients from robust model to extract t-values
-coefs.robust <- coef(summary(rlmm_ba))
-# calculate p-values based on robust t.values and non-robust approx. DFs
-p.values <- 2*pt(abs(coefs.robust[,3]), coefs$d.f., lower=FALSE)
-round(p.values,4)
 ```
 
-
+Now do width to depth
 ```{r}
 
 wd_2009 <- gr_95_ts %>% filter(yr >= 2009)
-
-lmm_wd_full <- lmer(log(wd_trans)~ 
-                 log(fac_taudem_17all_int)+
-                 log(us_precip_1981_2010_cpg_all)+
-                 log(ave_ann_cwd) +
-                 log(slope_percent_int_cpg_all) + 
-                 mgmt + 
-                 (1 | MAP_UNIT_N/site_id), REML = F,
-                 wd_2009)
 
 lmm_wd_simp <- lmer(log(wd_trans)~ 
                  log(fac_taudem_17all_int)+
@@ -359,7 +169,7 @@ lmm_wd_simp <- lmer(log(wd_trans)~
                  log(ave_ann_cwd) +
                  log(slope_percent_int_cpg_all) + 
                  mgmt + 
-                 (1 | site_id), REML = F, 
+                 (1 | Site), REML = T, 
                  wd_2009)
 
 lmm_wd_simp_yr <- lmer(log(wd_trans)~ 
@@ -368,21 +178,9 @@ lmm_wd_simp_yr <- lmer(log(wd_trans)~
                  log(ave_ann_cwd) +
                  log(slope_percent_int_cpg_all) + 
                  mgmt + 
-                 yr_change + 
-                 (yr_change|site_id), REML = F,
+                 Year + 
+                 (Year|Site), REML = T,
                  control = lmerControl(optimizer = 'bobyqa'),
-                 wd_2009)
-
-lmm_wd_simp_yr <- lmer(log(wd_trans)~ 
-                 log(fac_taudem_17all_int)+
-                 log(us_precip_1981_2010_cpg_all)+
-                 log(ave_ann_cwd) +
-                 log(slope_percent_int_cpg_all) + 
-                 mgmt + 
-                 (1 | MAP_UNIT_N/site_id) +
-                 yr_change + 
-                 (yr_change|site_id), REML = F,
-                 control = lmerControl(optimizer = 'nlminbwrap'),
                  wd_2009)
 
 
@@ -398,344 +196,34 @@ aa_aug <- broom.mixed::augment(lmm_bf)
 
 summ(lmm_wd_simp_yr, confint = T, t.df = 'k-r')
 summ(lmm_wd_simp, confint = T, t.df = 'k-r')
-summ(lmm_wd_full, confint = T, t.df = 'k-r')
 
-anova(lmm_wd_full, lmm_wd_simp)
-anova(lmm_wd_full, lmm_wd_simp_yr)
-anova(lmm_wd_simp, lmm_wd_simp_yr)
+anova(lmm_wd_simp_yr, lmm_wd_simp)
 
-summ(lmm_wd, confint = T)
+performance::icc(lmm_wd_simp_yr)
+performance::icc(lmm_wd_simp)
 
-plot(lmm_wd)
-ggplot() + geom_density(aes(residuals(lmm_wd)))
-shapiro.test(residuals(lmm_wd))
-qqPlot(residuals(lmm_wd), col = 'red')
+tab_model(lmm_wd_simp, lmm_wd_simp_yr,
+               df.method = 'kr',pred.labels = c(`log(fac_taudem_17all_int)`="log(FA Catchment Area)",
+               `log(us_precip_1981_2010_cpg_all)`="log(FA Average Annual Precipitation)",
+               `log(ave_ann_cwd)`="log(Mean Climatic Deficit)",
+               `log(slope_percent_int_cpg_all)`="log(FA Basin Slope %)",
+               mgmtReference = "Indpendent Variable"),
+            dv.labels = c("Model A", "Model B"), 
+            title = 'Width/Depth', file = 'tab_model_wd.html')
+plot(lmm_wd_simp_yr)
+ggplot() + geom_density(aes(residuals(lmm_wd_simp_yr)))
+shapiro.test(residuals(lmm_wd_simp_yr))
+car::qqPlot(residuals(lmm_wd_simp_yr), col = 'red')
 
-rlmm_wd <- rlmer(log(wd_trans)~ 
-                 log(fac_taudem_17all_int)+
-                 log(us_precip_1981_2010_cpg_all)+
-                 log(ave_ann_cwd) +
-                 log(slope_percent_int_cpg_all) + 
-                 mgmt + 
-                 yr_change + 
-                 (yr_change|site_id), REML = F,
-                 control = lmerControl(optimizer = 'bobyqa'),
-                 wd_2009)
-
-
-
-coefs <- as.data.frame(summ(lmm_wd_full)$coeftable)
-
-# get coefficients from robust model to extract t-values
-coefs.robust <- coef(summary(rlmm_wd))
-# calculate p-values based on robust t.values and non-robust approx. DFs
-p.values <- 2*pt(abs(coefs.robust[,3]), coefs$d.f., lower=FALSE)
-round(p.values,4)
-
-performance::icc(rlmm_wd, by_group = TRUE)
-
-t <- ranef(rlmm_wd)
-t2 <- t2 %>% mutate(sites = rownames(.))
-rownames(t2) <- NULL
-t2 <- t2 %>% tibble
-ranef(rlmm_wd)
-```
-
-
-## EMM
-
-```{r}
-library(emmeans)
-library(car)
-
-emm_init <- emmeans(rlmm_bf, specs = 'mgmt')
-summary(emm_init)
-bf.rg <- ref_grid(rlmm_bf, at = list(yr_change = seq(1, 21, 7)))
-
-emm <- plot(bf.rg, by = 'mgmt') + custom_theme()
-
-emm_gg <- as.data.frame(emm$data) %>% tibble()
-
-
-p1 <- emm_gg %>% mutate(shed_area = ifelse(mgmt %in% 'Reference', yr_change+.2, yr_change-.2),
-                        the.emmean = exp(the.emmean),
-                        lower.CL = exp(asymp.LCL),
-                        upper.CL = exp(asymp.UCL)) %>% filter(the.emmean >0) %>% 
-  ggplot() +
-  #geom_point(data = gr_95 , aes(mean_bf, shed_areakm2, color = mgmt), size = 3, alpha = 0.2)+
-  geom_errorbar(aes(the.emmean, yr_change, color=mgmt,xmin = lower.CL, xmax = upper.CL),
-  position = position_dodge2(width = 0.005, padding = 0.005), size = .75) + 
-  custom_theme(font_size = 12) + labs(x = 'Predicted Mean Bankfull Width (m)', 
-                        y = 'Watershed Area km2',
-                        color = "Group",
-                        title = 'Comparing estimated means by Watershed Area (km<sup>2</sup>)',
-                        subtitle = 'Average annual precipitation is held constant at 1193 (mm)')  +
-  geom_point(aes(the.emmean, shed_area), size = 1)
-p1 
-
-
-lmm_wd@frame
-
-ba.rg <- ref_grid(lmm_wd, at = list(slope_percent_int_cpg_all = seq(20, 40, 5)))
-
-emm <- plot(ba.rg, by = 'mgmt') + custom_theme()
-
-emm_gg <- as.data.frame(emm$data) %>% tibble()
-
-
-p1 <- emm_gg %>% mutate(shed_area = ifelse(mgmt %in% 'Reference', slope_percent_int_cpg_all +.4, slope_percent_int_cpg_all -.4),
-                        the.emmean = exp(the.emmean),
-                        lower.CL = exp(lower.CL),
-                        upper.CL = exp(upper.CL)) %>% filter(the.emmean >0) %>% 
-  ggplot() +
-  #geom_point(data = gr_95 , aes(mean_bf, shed_areakm2, color = mgmt), size = 3, alpha = 0.2)+
-  geom_errorbar(aes(the.emmean, slope_percent_int_cpg_all , color=mgmt,xmin = lower.CL, xmax = upper.CL),
-  position = position_dodge2(width = 0.005, padding = 0.005), size = .75) + 
-  custom_theme(font_size = 12) + labs(x = 'Predicted Mean Bankfull Width (m)', 
-                        y = 'Watershed Area km2',
-                        color = "Group",
-                        title = 'Comparing estimated means by Watershed Area (km<sup>2</sup>) (without high residuals)',
-                        subtitle = 'Average Basin Elevation is held constant at 1674 (m)\nTWI-CPG at 669')  +
-  geom_point(aes(the.emmean, shed_area), size = 1)
-p1 
 
 
 ```
-
-
-## Look into harvest
-
-```{r}
-lmm_bf_harv <- lmer(log(bf) ~ 
-                    log(fac_taudem_17all_int)+
-                    log(us_precip_1981_2010_cpg_all)+
-                    log(slope_percent_int_cpg_all) + 
-                    harv_group + 
-                    (1 | MAP_UNIT_N/site_id),
-                    gr_95_ts %>% filter(mgmt == 'Managed'))
-
-rlmm_bf_harv <- rlmer(log(bf) ~ 
-                    log(fac_taudem_17all_int)+
-                    log(us_precip_1981_2010_cpg_all)+
-                    log(slope_percent_int_cpg_all) + 
-                    harv_group + 
-                    (1 | MAP_UNIT_N/site_id),
-                    gr_95_ts %>% filter(mgmt == 'Managed'))
-
-summ(lmm_bf_harv, confint = T)
-summary(lmm_bf_harv)
-
-
-##### pvalues
-
-
-coefs <- as.data.frame(summ(lmm_bf_harv)$coeftable)
-
-# get coefficients from robust model to extract t-values
-coefs.robust <- coef(summary(rlmm_bf_harv))
-# calculate p-values based on robust t.values and non-robust approx. DFs
-p.values <- 2*pt(abs(coefs.robust[,3]), coefs$d.f., lower=FALSE)
-round(p.values,4)
-
-
-lmm_ba_harv <- lmer(log(bank_angle)~
-                 log(fac_taudem_17all_int)+
-                 log(ave_basin_elev)+
-                 log(twi_100_int_cpg_all) + 
-                 harv_group + 
-                 (1 | MAP_UNIT_N/site_id),
-                 gr_95_ts %>% filter(mgmt == 'Managed'))
-
-summ(lmm_ba_harv)
-ranef(lmm_ba_harv)
-
-rlmm_ba_harv <- rlmer(log(bank_angle)~
-                 log(fac_taudem_17all_int)+
-                 log(ave_basin_elev)+
-                 log(twi_100_int_cpg_all) + 
-                 harv_group + 
-                 (1 | MAP_UNIT_N/site_id),
-                 gr_95_ts %>% filter(mgmt == 'Managed'))
-summary(rlmm_ba_harv)
-
-##### pvalues
-
-
-coefs <- as.data.frame(summ(lmm_bf_harv)$coeftable)
-
-# get coefficients from robust model to extract t-values
-coefs.robust <- coef(summary(rlmm_bf_harv))
-# calculate p-values based on robust t.values and non-robust approx. DFs
-p.values <- 2*pt(abs(coefs.robust[,3]), coefs$d.f., lower=FALSE)
-round(p.values,4)
-
-
-```
-
-## EMM harvest
 
 
 ```{r}
-bf.rg_harv <- ref_grid(rlmm_bf_harv, at = list(fac_taudem_17all_int = seq(10000, 163291, 16329.1)))
-
-emm <- plot(bf.rg_harv, by = 'harv_group') + custom_theme()
-
-emm_gg <- as.data.frame(emm$data) %>% tibble()
-
-
-p1 <- emm_gg %>% mutate(shed_area = ifelse(harv_group %in% 'Low', fac_taudem_17all_int-5000,
-                                           ifelse(harv_group %in% 'Mod', fac_taudem_17all_int, fac_taudem_17all_int+5000)),
-                        the.emmean = exp(the.emmean),
-                        lower.CL = exp(asymp.LCL),
-                        upper.CL = exp(asymp.UCL)) %>% filter(the.emmean >0) %>% 
-  ggplot() +
-  #geom_point(data = gr_95 , aes(mean_bf, shed_areakm2, color = mgmt), size = 3, alpha = 0.2)+
-  geom_errorbar(aes(the.emmean, fac_taudem_17all_int, color=harv_group,xmin = lower.CL, xmax = upper.CL),
-  position = position_dodge2(width = 0.005, padding = 0.005), size = .75) + 
-  scale_y_continuous(labels = scales::comma) +
-  custom_theme(font_size = 12) + labs(x = 'Predicted Mean Bankfull Width (m)', 
-                        y = 'Flow Accumulated Area',
-                        color = "Harvest Group",
-                        title = 'Comparing Bankfull Width (m) estimated means by Flow Accumulated Area')  +
-  geom_point(aes(the.emmean, shed_area), size = 1) +
-  scale_color_manual(values = c('forestgreen', 'orange', 'red'))
-p1 
+library(webshot)
+webshot("tab_model_wd.html", "tab_model_wd.png")
+webshot("tab_model_ba.html", "tab_model_ba.png")
+webshot("tab_model_bf.html", "tab_model_bf.png")
 ```
-
-
-# Plotting Stuff
-```{r}
-source("utils.R")
-library(plotly)
-library(ggh4x)
-library(resourceviz)
-library(thematic)
-cairo_view()
-plot_facet <- list()
-for(i in 1:length(unique(gr_95_ts$MAP_UNIT_N))){
-
-plots <- gr_95_ts  %>% 
-  filter(MAP_UNIT_N %in% unique(gr_95_ts$MAP_UNIT_N)[i]) %>% 
-ggplot() + 
-  geom_point(aes(yr, bf, group = site_id, color = mgmt), size = 0.5) + 
-  stat_smooth(geom = 'line',aes(yr,bf, group = site_id, color = mgmt), method = 'lm', se = F, alpha = 0.5, size = .5) +
-  geom_smooth(aes(yr, bf), method = 'lm', color = 'black') +
-  scale_y_log10() +
-  facet_wrap(~ MAP_UNIT_N) +
-  custom_theme(font_size = 10) + 
-  theme(strip.text = element_text(size = 10))+
-  labs(x = '', y = 'Bankfull Width (m)', color = '')
-  
-plots <- list(plots)
-names(plots) <- paste('p_', i)
-
-plot_facet <- append(plot_facet, plots)
-
-}
-
-
-plot_facet[[1]]
-plot_facet[[2]]
-plot_facet[[3]]
-plot_facet[[4]]
-plot_facet[[5]]
-plot_facet[[6]]
-
-
-library(patchwork)
-
-((plot_facet[[2]]|plot_facet[[3]]|plot_facet[[6]])/
-(plot_facet[[4]]|plot_facet[[5]]|plot_facet[[1]])) +
- plot_layout(guides = 'collect') + plot_annotation(title = 'Bankfull Width (m) across Ecological Section by Year of Sample')
-
-bf_plot <- gr_95_ts  %>% 
-  filter(!is.na(bf)) %>% 
-  mutate(all_pred = predict(lm(bf~yr, data = .))) %>% 
-ggplot() + 
-  geom_point(aes(yr, bf, group = site_id),  size = 0.5, alpha = 0.15) + 
-  stat_smooth(geom = 'line',aes(yr,bf, group = site_id), method = 'lm', se = F, alpha = 0.15, size = .5) +
-  geom_smooth(aes(yr, bf, color = 'Fixed per Ecological Section'), method = 'lm')  +
-  stat_smooth(geom = 'line', method = 'lm', col = 'black',
-              aes(yr, y = all_pred))+
-  scale_y_log10() +
-  facet_nested(~ MAP_UNIT_N) +
-  custom_theme(font_size = 10) + 
-  theme(strip.text = element_text(size = 9),
-        legend.position = 'none')+
-  labs(x = '', y = 'Bankfull Width (m)', color = '')
-
-wd_plot <- gr_95_ts  %>% 
-  filter(yr >= 2009) %>% 
-  filter(!is.na(wd_trans)) %>% 
-  mutate(all_pred = predict(lm(wd_trans~yr, data = .))) %>% 
-ggplot() + 
-  geom_point(aes(yr, wd_trans, group = site_id), size = 0.5, alpha = 0.15) + 
-  stat_smooth(geom = 'line',aes(yr,wd_trans, group = site_id), method = 'lm', se = F, alpha = 0.15, size = .5) +
-  geom_smooth(aes(yr, wd_trans, color = 'Fixed per Ecological Section'), method = 'lm') +
-  stat_smooth(geom = 'line', method = 'lm', col = 'black',
-              aes(yr, y = all_pred, linetype = 'Overall Population Effect')) +
-  scale_y_log10() +
-  scale_x_continuous(breaks = c(2005, 2010, 2015), limits = c(2000,2020)) +
-  facet_nested(~ MAP_UNIT_N) +
-  custom_theme(font_size = 10) + 
-  theme(strip.text = element_text(size = 9),
-        legend.position = 'top')+
-  labs(x = '', y = 'Bankfull Width/Depth', color = '', linetype = '')
-wd_plot
-
-ba_plot <- gr_95_ts  %>% 
-  filter(!is.na(bank_angle)) %>% 
-  mutate(all_pred = predict(lm(bank_angle~yr, data = .))) %>% 
-ggplot() + 
-  geom_point(aes(yr, bank_angle, group = site_id), size = 0.5, alpha = 0.15) + 
-  stat_smooth(geom = 'line',aes(yr,bank_angle, group = site_id), method = 'lm', se = F, alpha = 0.15, size = .5) +
-  geom_smooth(aes(yr, bank_angle, color = 'Fixed per Ecological Section'), method = 'lm')+
-  stat_smooth(geom = 'line', method = 'lm', col = 'black',
-              aes(yr, y = all_pred)) +
-  scale_y_log10() +
-  facet_nested(~ MAP_UNIT_N) +
-  custom_theme(font_size = 10) + 
-  theme(strip.text = element_text(size = 9),
-        legend.position = 'none')+
-  labs(x = '', y = 'Bank Angle (deg)', color = '')
-
-
-(wd_plot/bf_plot/ba_plot) 
-
-
-
-glimpse(gr_95_ts)
-gr_95_ts  %>% 
-  filter(!is.na(bf)) %>% 
-  mutate(all_pred = predict(lm(bf~slope_percent_int_cpg_all, data = .))) %>% 
-ggplot() + 
-  geom_point(aes(slope_percent_int_cpg_all, bf, group = site_id, color = mgmt), size = 0.5) + 
-  stat_smooth(geom = 'line',aes(slope_percent_int_cpg_all,bf, group = site_id, color = mgmt), method = 'lm', se = F, alpha = 0.5, size = .5) +
-  geom_smooth(aes(slope_percent_int_cpg_all, bf, color = mgmt), method = 'lm') +
-  stat_smooth(geom = 'line', method = 'lm', col = 'black',
-              aes(slope_percent_int_cpg_all, y = all_pred))+
-  scale_y_log10() +
-  scale_x_log10() +
-  facet_wrap(~ MAP_UNIT_N) +
-  custom_theme(font_size = 10) + 
-  theme(strip.text = element_text(size = 10))+
-  labs(x = '', y = 'Bankfull Width (m)', color = '')
-
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

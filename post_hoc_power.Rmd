@@ -1,0 +1,351 @@
+---
+title: "Post-hoc Power Analysis"
+output: 
+  html_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=F, warning = F, error=F)
+ggplot2::theme_set(ggplot2::theme_bw())
+source('R/functions.R')
+library(ggforce)
+resourceviz::cairo_view()
+```
+
+
+## Objectives  
+
+- This is the workflow for the post-hoc power/sample/effect analysis. This analysis is built off of the work done by Roper et al. 2002, Zar et al. (1996) and Champely (2009).  
+
+- The goal is to provide insight into sample size, power (Type II error rate) and detectable difference (effect size) so that we can provide some reasoning on where we are at with our conclusions.  
+
+## Findings  
+
+
+- We have really good power (80%) at a 0.1 Type I error rate and enough samples to detect a difference at ~0.55, which is a moderate effect size. I think that it is safe to say that if we didn't find a difference between managed and bankfull width there is a 20% chance of a false negative at a moderate effect size. If the *true* effect size is smaller then our power will decrease and vice versa.  
+
+```{r,echo = F, out.width='600%'}
+knitr::include_graphics('mbf_pow.png')
+
+```
+- We don't have good power (25%) at a 0.1 Type I error rate and enough samples to detect a difference at ~.6, which is a moderate effect size. I think that it is safe to say that if we didn't find a difference between managed and bankfull width there is a 75% chance of a false negative at a moderate effect size. If the *true* effect size is smaller then our power will decrease and vice versa. Thus, our conclusions don't hold a lot of weight.  
+
+```{r,echo = F, out.width='600%'}
+knitr::include_graphics('mwd_pow.png')
+
+```
+- We don't have good power (15%) at a 0.1 Type I error rate and enough samples to detect a difference at ~.6, which is a moderate effect size. I think that it is safe to say that if we didn't find a difference between managed and bankfull width there is a 85% chance of a false negative at a moderate effect size. If the *true* effect size is smaller then our power will decrease and vice versa. Thus, our conclusions don't hold a lot of weight.    
+
+```{r,echo = F, out.width='600%'}
+knitr::include_graphics('mba_pow.png')
+
+```
+
+
+
+## Analysis  
+
+We'll go through the methods from Roper et al. 2002, Zar et al. (1996) and Champely (2009) by providing statistics and visualizations in the following sections.  
+
+### Data  
+
+Let's bring in the data and look at the two groups for each of the dependent variables we are testing.  
+
+```{r, echo = F}
+library(tidyverse)
+gr_95 <- read_csv('data/gr_95.csv')
+
+```
+
+```{r, echo=F}
+gr_95 %>% 
+  pivot_longer(cols = c('mean_bf', 'mean_bank_an', 'mean_wd_2009')) %>% 
+  mutate(name = case_when(name == 'mean_bf' ~ 'Mean Bankfull',
+                        name == 'mean_bank_an' ~ 'Mean Bank Angle',
+                        name == 'mean_wd_2009' ~ 'Mean W/D',
+                        TRUE ~ NA_character_)) %>% 
+ggplot(aes(x = mgmt, y = value)) +
+  ggdist::stat_halfeye(
+    adjust = .5,
+    width = .6,
+    .width = 0,
+    justification = -.3,
+    point_colour = NA, aes(fill = mgmt)) +
+  geom_boxplot(
+    width = .25,
+    outlier.shape = NA, size = .75,
+    aes(color = mgmt)
+  ) +
+  geom_point(
+    size = .5,
+    alpha = .43,
+    position = position_jitter(
+      seed = 1, width = .1
+    ), aes(color = mgmt)
+  ) +
+  resourceviz::custom_theme() +
+  coord_cartesian(xlim = c(1.2, NA), clip = "off") +
+  labs(y = 'Values',
+       x = '',
+       title = 'Raincloud plots of Managed vs. Reference',
+       subtitle = 'n = 118 for Reference\nn = 189 for Managed') + theme(legend.position = 'none') + 
+  facet_wrap(~name, scales = 'free', ncol = 1)
+```  
+
+Of note, our group samples are unbalanced (constrained to one group) and will need proper treatment (fixing $n$). Besides having constrained groups, we also need to make sure that our sample variances are equal (or close). Below we'll use the `var.test()` function to test whether the variances are equal. It looks like we might be challenged with this assumption for mean bank angle and mean bankfull width, i.e. p values $>$ 0.05 are considered equal variances. However, I think it will be fine to assume equal variances for our purposes (especially Mean Bankfull and W/D). 
+```{r, echo = F}
+
+cat("Mean Bankfull (variance) p value: ", var.test(mean_bf~mgmt, data = gr_95)$p.value)
+cat("Mean Bank Angle (variance) p value: ", var.test(mean_bank_an~mgmt, data = gr_95)$p.value)
+cat("Mean W/D (variance) p value: ", var.test(mean_wd_2009~mgmt, data = gr_95)$p.value)
+```
+
+In the following sections we will also be assuming that our data in normally distributed. Below, we'll use the `shapiro.test()` function to test whether normality is met or not, i.e. a p value of $>$ 0.05 is considered normal.  
+
+```{r, echo=F}
+cat("Reference Mean Bankfull (normality) p value: ", shapiro.test(gr_95[gr_95$mgmt == 'Reference',]$mean_bf)$p.value)
+cat("Reference Mean Bank Angle (normality) p value: ", shapiro.test(gr_95[gr_95$mgmt == 'Reference',]$mean_bank_an)$p.value)
+cat("Reference Mean W/D (normality) p value: ", shapiro.test(gr_95[gr_95$mgmt == 'Reference',]$mean_wd_2009)$p.value)
+
+cat("Managed Mean Bankfull (normality) p value: ", shapiro.test(gr_95[gr_95$mgmt == 'Managed',]$mean_bf)$p.value)
+cat("Managed Mean Bank Angle (normality) p value: ", shapiro.test(gr_95[gr_95$mgmt == 'Managed',]$mean_bank_an)$p.value)
+cat("Managed Mean W/D (normality) p value: ", shapiro.test(gr_95[gr_95$mgmt == 'Managed',]$mean_wd_2009)$p.value)
+
+```
+
+As you can see from above (and probably from the graphs as well) that our variables are not normally distributed (a few are) but may need some transformations to move on. In Archer et al. (2004) General Technical Report (GTR), some of the variables were either log or square root transformed (width-to-depth ratio was one of them). We can try this with our data and rerun the tests to see if we can get it closer to a normal distribution but it doesn't seem to get us there... From here on out, we are going to *just assume* that our data comes from a normal distribution albeit some of the samples are not.   
+
+### Pooled Variance
+
+Before diving into the minimum detectable difference and minimum sample size, let's calculate $2s^2{_p}$ (pooled variance). This is the pooled variance between groups (equation 8.4 Zar et al. (1996)), which will help us estimate the population variance ($\sigma^2$) by pooling the two groups variances. Remember, we are assuming a normal distribution and equal variances.
+
+<center>
+**Pooled Variance; eq 8.4**  
+$$
+s^2{_p}=\frac{SS_1+SS_2}{v_1+v_2}; \ \text{where} \ SS = \sum_{i=1}^{n}(x_i-\bar{x})^2 \ \text{and} \ v_i=n-1
+$$
+</center>  
+
+From the equation above, we can now calculate this for each of our dependent variables.  
+
+```{r}
+ss <- gr_95 %>% mutate(mean_bf = rnorm(305, 100, 5)) %>% group_by(mgmt)  %>% 
+  summarise(across(c('mean_bf', 'mean_bank_an', 'mean_wd_2009'),
+                                              list(ss = ~sum((.x - mean(.x, na.rm = T))^2, na.rm = T))))
+ss
+
+```
+
+Now we just need to add Managed and Reference and divide by the degrees of freedom.  
+
+```{r}
+pooled_var <- ss %>% summarise(across(contains('ss'), list(pooled_var = ~sum(.x, na.rm = T)/(188+115))))
+pooled_var
+```
+
+As you can see from above, bank angle has really high pooled variance! This can also be seen in the graph above where the distribution for bank angle is a little more spread out. Why does this matter? Well this is ultimately going to effect the power analysis since variance is a key component.  
+
+### Minimum Detectable Difference  
+
+After calculating the pooled variance we can now see what a minimum detectable difference would be at a $\alpha$ of 0.1 and $\beta$ of 80% as well as a minimum sample size.  
+
+We'll use the method from equation 8.22 in Zar et al. (1996) to see what a minimum sample size would need to be given certain parameters (Type I ($\alpha$) and II ($\beta$) error, variance $2s^2{_p}$, etc). This is the method used in Roper et al. (2002) were they used stream heterogeneity and observer variance to calculate sample size ranges for various parameters ($\alpha, \, \beta, \ 2s^2{_p}, \text{and} \ \delta$. We'll be using our groups (Reference, Managed) instead to calculate the minimal sample size.
+
+<center>
+**Equation 8.22**
+
+$$
+n \geq \frac{2s^2{_p}}{\delta^2}(t_{\alpha,v}+t_{\beta(1),v})^2
+$$
+</center>
+
+
+Now we can see what it would take with 80% power and 10% Type I error rate at different levels of effect size.  
+
+```{r, echo = F, warning=F,message=F,error=F}
+
+min_sample_size <- function(pooled_variance,type_1 = .1, power = 0.2, mdd){
+  
+mean_bf_n <- vector()
+
+  for(j in seq(10,1600,20)){
+  
+  t1 <- qt(type_1/2, df = j, lower.tail = F)
+  t2 <- qt(power, df = j, lower.tail = F)
+  
+  n <- (2*(pooled_variance)*t1*t2)/mdd^2
+  
+  mean_bf_n <- append(mean_bf_n, n)
+  }
+
+sample_n <- tibble(delta = rep(mdd, length(mean_bf_n)), n = mean_bf_n)
+
+mode <- function(x) {
+   return(as.numeric(names(which.max(table(x)))))
+}
+
+mode_n <- sample_n %>% group_by(delta) %>% 
+          mutate(n = round(n,.5)) %>% 
+          summarise(mode_n = mode(n))
+
+final_df <- sample_n %>% left_join(mode_n, by = 'delta')
+
+final_df
+
+}
+
+
+
+n <- (2*189*118)/(189+118)
+
+sample_size_bf <- tibble() 
+
+for(i in seq(0.05, 1, 0.05)){
+  
+  samp <- min_sample_size(pooled_variance = pooled_var$mean_bf_ss_pooled_var, mdd = i)
+  
+  sample_size_bf <- bind_rows(sample_size_bf,samp)
+}
+
+sample_size_wd <- tibble() 
+
+for(i in seq(0.05, 1, 0.05)){
+  
+  samp <- min_sample_size(pooled_variance = pooled_var$mean_wd_2009_ss_pooled_var, mdd = i)
+  
+  sample_size_wd <- bind_rows(sample_size_wd,samp)
+}
+
+sample_size_ba <- tibble() 
+
+for(i in seq(0.05, 1, 0.05)){
+  
+  samp <- min_sample_size(pooled_variance = pooled_var$mean_bank_an_ss_pooled_var, mdd = i)
+  
+  sample_size_ba <- bind_rows(sample_size_ba,samp)
+}
+
+sample_size_bf %>% group_by(delta) %>% slice(n = 1) %>% 
+  filter(delta > 0.25) %>% 
+  ggplot(aes(delta, mode_n)) + 
+  geom_point() +
+  geom_line() +
+  labs(x = 'Minimum Detectable Difference (delta)', 
+       y = 'Minimum Sample Size (n)',
+       title = "Sample Size and Minimum Detectable Difference for Mean Bankfull Width",
+       subtitle = "Black dashed line is the lowest sample size (n = 118)\nType I = (0.1),\nType II = 80%") +
+  scale_y_continuous(breaks = seq(0, 500, 100)) + 
+  scale_x_continuous(breaks = seq(0, 1, .1)) + 
+  geom_hline(yintercept = 118, linetype = 2) + 
+  theme_bw()
+
+sample_size_wd %>% group_by(delta) %>% slice(n = 1) %>% 
+  filter(delta > 0.25) %>% 
+  ggplot(aes(delta, mode_n)) + 
+  geom_point() +
+  geom_line() +
+  labs(x = 'Minimum Detectable Difference (delta)', 
+       y = 'Minimum Sample Size (n)',
+       title = "Sample Size and Minimum Detectable Difference for Mean W/D",
+       subtitle = "Black dashed line is the lowest sample size (n = 118)\nType I = (0.1),\nType II = 80%") +
+  scale_y_continuous(breaks = seq(0, 5000, 100)) + 
+  scale_x_continuous(breaks = seq(0, 1, .1)) + 
+  geom_hline(yintercept = 118, linetype = 2) + 
+  theme_bw()
+
+sample_size_ba %>% group_by(delta) %>% slice(n = 1) %>% 
+  filter(delta > 0.25) %>% 
+  ggplot(aes(delta, mode_n)) + 
+  geom_point() +
+  geom_line() +
+  labs(x = 'Minimum Detectable Difference (delta)', 
+       y = 'Minimum Sample Size (n)',
+       title = "Sample Size and Minimum Detectable Difference for Mean Bank Angle",
+       subtitle = "Black dashed line is the lowest sample size (n = 118)\nType I = (0.1),\nType II = 80%") +
+  scale_x_continuous(breaks = seq(0, 1, .1)) + 
+  geom_hline(yintercept = 118, linetype = 2) + 
+  theme_bw()
+  
+
+```
+
+As you can see from above, bank angle has to be a really really big effect to tell any difference between the two...  
+
+
+### Power  
+
+To calculate the power (Type II error rate) we will use the equation 8.25 from Zar et al. (1996).  
+<center>
+
+$$
+\phi=\sqrt{\frac{n\delta^2}{4s_p{^2}}}
+$$
+
+
+Where, $n = \frac{2n_1n_2}{n_1 + n_2}$ aka harmonic mean of the samples.
+
+</center>
+```{r, echo = F, warning=F, error=F, message=F}
+
+
+power_test <- function(pooled_variance, n, d_high = 1, d_low = 0.05){
+  power_results <- vector()
+  d <- seq(d_low, d_high, .05)
+  t1 <- qt(0.1, df = n, lower.tail = F)
+for(i in d){
+#p <- sqrt((n*i^2)/(4*pooled_variance))
+p <- (i/sqrt((2*pooled_variance)/n))-t1
+p <- pnorm(p)
+power_results <- append(power_results, p)
+}
+power_results <- tibble(power = power_results, 
+                        mdd = d)
+}
+power_mean_bf <- power_test(pooled_var$mean_bf_ss_pooled_var, n = n)
+
+power_mean_bf %>% 
+ggplot() + 
+  geom_line(aes(mdd, power))+
+  labs(x = 'Minimum Detectable Difference (delta)', 
+       y = 'Power (1-beta)',
+       title = "Power and Minimum Detectable Difference for Mean Bankfull Width",
+       subtitle = "Type I = (0.1)") +
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 10)) +
+  theme_bw()
+
+power_mean_wd <- power_test(pooled_var$mean_wd_2009_ss_pooled_var, n = n, d_high = 2)
+
+power_mean_wd %>% 
+ggplot() + 
+  geom_line(aes(mdd, power))+
+  labs(x = 'Minimum Detectable Difference (delta)', 
+       y = 'Power (1-beta)',
+       title = "Power and Minimum Detectable Difference for Mean W/D",
+       subtitle = "Type I = (0.1)") +
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 10)) +
+  theme_bw()
+
+power_mean_ba <- power_test(pooled_var$mean_bank_an_ss_pooled_var, n = n, d_high = 4)
+
+power_mean_ba %>% 
+ggplot() + 
+  geom_line(aes(mdd, power))+
+  labs(x = 'Minimum Detectable Difference (delta)', 
+       y = 'Power (1-beta)',
+       title = "Power and Minimum Detectable Difference for Mean Bank Angle",
+       subtitle = "Type I = (0.1)") +
+  scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
+  scale_x_continuous(breaks = scales::pretty_breaks(n = 10)) +
+  theme_bw()
+```
+
+Again, you can see that even at a really large effect (delta > 0.8) for bank angle we would only have 20% power.  
+
+
+## References  
+
+Stephane Champely (2020). pwr: Basic Functions for Power Analysis. R package version
+  1.3-0. https://CRAN.R-project.org/package=pwr

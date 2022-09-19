@@ -2,3 +2,14 @@
 .Rhistory
 .RData
 .Ruserdata
+*.png
+*.tif
+*.xml
+*.Rmd
+*.html
+*.R
+!_targets.R
+!lm_mod.Rmd
+!README.html
+!final_wf.Rmd
+!post_hoc_power.Rmd

@@ -19,6 +19,9 @@ library(broom)
 library(sf)
 library(performance)
 library(resourceviz)
+library(caret)
+library(CAST)
+library(glmnet)
 thematic::thematic_on(font = 'Montserrat')
 source('R/functions.R')
 
@@ -214,125 +217,31 @@ managed area or reference; it just happens.
 
 ## Models
 
-We'll run the models for ANCOVA below for both dv's. We want the most parsimonous model so we'll use AIC to gain information about the simplest model; managing under-over fitting.
+We'll run the models for ANCOVA below for both dv's. We want the most parsimonous model so we'll use a mixture model (ridge and lasso aka elastic-net) to gain information about the simplest model; managing under-over fitting.
 
 ```{r}
 
-set.seed(123)
-library(caret)
-library(CAST)
-library(glmnet)
+lasso_model_bf <- feature_selection(gr_95, 'bf')
+plot(lasso_model_bf)
+var_imp_bf <- varImp(lasso_model_bf$finalModel, lasso_model_bf$bestTune$lambda)
+coef(lasso_model_bf$finalModel, lasso_model_bf$bestTune$lambda)
+plot(lasso_model_bf$finalModel, label = T)
+plot(lasso_model_bf$finalModel, label = T, xvar = c('lambda'))
 
-gr_95_bss <- gr_95 %>% select(mean_bf, fac_taudem_17all_int,
-                              us_precip_1981_2010_cpg_all, us_tmax_1981_2010_int_cpg_all,
-                              swe_avg_0301_cpg_all, clay_100_cpg_all, slope_percent_int_cpg_all,
-                              MAP_UNIT_N) %>% 
-             mutate(across(1:7, ~log(.)))
-
-set.seed(1234)
-indicesBlock <- CreateSpacetimeFolds(gr_95_bss, spacevar = "MAP_UNIT_N", k = 6)
-
-
-# Set up repeated k-fold cross-validation
-train.control <- caret::trainControl(method = "cv",
-                                     index = indicesBlock$index,
-                                       returnResamp = "all",
-                                       savePredictions = 'all')
-
-# Train the model
-set.seed(136564)
-lasso_model <- train(gr_95_bss[,2:7],
-                       gr_95_bss$mean_bf,
-                        method = "glmnet",metric = "RMSE",
-                        tuneGrid = expand.grid(alpha = 1,lambda = seq(0.001,0.1,by = 0.001)),
-                        trControl = train.control
-                    )
-lasso_model
-plot(lasso_model)
-varImp(lasso_model$finalModel, lasso_model$bestTune$lambda)
-coef(lasso_model$finalModel, lasso_model$bestTune$lambda)
-
-mod_bf <- lm(log(mean_bf)~log(fac_taudem_17all_int)+
-               log(us_precip_1981_2010_cpg_all)+
-               log(us_tmax_1981_2010_int_cpg_all) +
-               log(slope_percent_int_cpg_all) + 
-               log(clay_100_cpg_all)+
-               MAP_UNIT_N +
-               mgmt, data = gr_95)
-Anova(mod_bf, type = 'III')
-
-## bank angle section
-gr_95_bss <- gr_95 %>% select(mean_bank_an, fac_taudem_17all_int,
-                              ave_basin_elev, streamslope_percent_int_cpg_all,
-                              silt_100_cpg_all, twi_100_int_cpg_all,
-                              MAP_UNIT_N) %>% 
-             mutate(across(1:6, ~log(.)))
-
-set.seed(1234)
-indicesBlock <- CreateSpacetimeFolds(gr_95_bss, spacevar = "MAP_UNIT_N", k = 6)
-
-
-# Set up repeated k-fold cross-validation
-train.control <- caret::trainControl(method = "cv",
-                                     index = indicesBlock$index,
-                                       returnResamp = "all",
-                                       savePredictions = 'all')
-
-# Train the model
-set.seed(136564)
-lasso_model_ba <- train(gr_95_bss[,2:6],
-                       gr_95_bss$mean_bank_an,
-                        method = "glmnet",metric = "RMSE",
-                        tuneGrid = expand.grid(alpha = 1,lambda = seq(0.001,0.1,by = 0.001)),
-                        trControl = train.control
-                    )
-lasso_model_ba
+lasso_model_ba <- feature_selection(gr_95, 'ba')
 plot(lasso_model_ba)
-varImp(lasso_model_ba$finalModel, lasso_model_ba$bestTune$lambda)
+var_imp_ba <- varImp(lasso_model_ba$finalModel, lasso_model_ba$bestTune$lambda)
 coef(lasso_model_ba$finalModel, lasso_model_ba$bestTune$lambda)
+plot(lasso_model_bf$finalModel, label = T)
+plot(lasso_model_bf$finalModel, label = T, xvar = c('lambda'))
 
-#for mean_bank_an
-mod_bank <- lm(log(mean_bank_an)~log(fac_taudem_17all_int)+
-                 log(ave_basin_elev)+
-                 log(twi_100_int_cpg_all) +
-                 MAP_UNIT_N +
-                 mgmt, 
-                 data = gr_95)
-Anova(mod_bank, type = 'III')
-
-### w/d section
-gr_95_bss <- gr_95 %>% select(mean_wd_2009,'fac_taudem_17all_int','us_precip_1981_2010_cpg_all', 'ave_ann_cwd', 'swe_avg_0301_cpg_all', 'clay_100_cpg_all', 'slope_percent_int_cpg_all',
-                              MAP_UNIT_N) %>% 
-             mutate(across(1:7, ~log(.))) %>% na.omit()
-
-set.seed(1234)
-indicesBlock <- CreateSpacetimeFolds(gr_95_bss, spacevar = "MAP_UNIT_N", k = 6)
-
-# Set up repeated k-fold cross-validation
-train.control <- caret::trainControl(method = "cv",
-                                     index = indicesBlock$index,
-                                       returnResamp = "all",
-                                       savePredictions = 'all')
-
-# Train the model
-set.seed(136564)
-lasso_model_wd <- train(gr_95_bss[,2:7],
-                       gr_95_bss$mean_wd_2009,
-                        method = "glmnet",metric = "RMSE",
-                        tuneGrid = expand.grid(alpha = 1,lambda = seq(0.001,0.1,by = 0.001)),
-                        trControl = train.control
-                    )
-lasso_model_wd
+lasso_model_wd <- feature_selection(gr_95, 'wd')
 plot(lasso_model_wd)
-varImp(lasso_model_wd$finalModel, lasso_model_wd$bestTune$lambda)
+var_imp_wd <- varImp(lasso_model_wd$finalModel, lasso_model_wd$bestTune$lambda)
 coef(lasso_model_wd$finalModel, lasso_model_wd$bestTune$lambda)
+plot(lasso_model_bf$finalModel, label = T)
+plot(lasso_model_bf$finalModel, label = T, xvar = c('lambda'))
 
-mod_wd <- lm(log(mean_wd_2009)~log(fac_taudem_17all_int)+
-                 log(us_precip_1981_2010_cpg_all) +
-                 log(slope_percent_int_cpg_all) +
-                 MAP_UNIT_N +
-                 mgmt, data = gr_95)
-Anova(mod_wd)
 ```
 
 ## Residual assumptions
@@ -342,26 +251,20 @@ homogeneity of variance and normally distributed.
 
 ```{r}
 
+bf_results <- check_if_normal_hetero('gr_95', 'bf', var_imp = var_imp_bf)
 #mean_bf
-check_normality(mod_bf)
 #not normal
+#not hetereoscedastic
 
-check_heteroscedasticity(mod_bf)
-#not hetereoscedastic 
-
+ba_results <- check_if_normal_hetero('gr_95', 'ba', var_imp = var_imp_ba)
 #mean_bank_an
-
-check_normality(mod_bank)
 #normal
+# not hetereoscedastic 
 
-check_heteroscedasticity(mod_bank)
-#hetereoscedastic 
-
-check_normality(mod_wd)
+wd_results <- check_if_normal_hetero('gr_95', 'wd', var_imp = var_imp_wd)
+#width/depth
 #normal
-
-check_heteroscedasticity(mod_wd)
-#hetereoscedastic 
+#not hetereoscedastic 
 ```
 
 Let's look at the `mod_bf` model and see what's going on.
@@ -423,7 +326,7 @@ mod_ba_filt <- lm(log(mean_bank_an)~log(fac_taudem_17all_int)+
 ### Now to width/depth section
 
 mod_wd_filt <- lm(log(mean_wd_2009)~log(fac_taudem_17all_int)+
-                 log(us_precip_1981_2010_cpg_all)+
+                 log(us_precip_1981_2010_cpg_all) +
                  log(slope_percent_int_cpg_all) +
                  MAP_UNIT_N +
                  mgmt, data = gr_95)
