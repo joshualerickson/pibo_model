@@ -9,8 +9,12 @@
 *.html
 *.R
 *.Rda
-!/_targets.R
-!/lm_mod.Rmd
-!/README.html
-!/final_wf.Rmd
-!/post_hoc_power.Rmd
+*.docx
+*tab_model_ba_files
+*/tab_model_bf_files
+*/tab_model_wd_files
+!_targets.R
+!lm_mod.Rmd
+!README.html
+!final_wf.Rmd
+!post_hoc_power.Rmd
