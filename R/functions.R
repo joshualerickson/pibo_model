@@ -75,11 +75,6 @@ multi_collin <- function(data, type){
 
 linear_plot <- function(data, x, y, iv = NULL, log_y = NULL, log_x = NULL){
 
-<<<<<<< HEAD
-=======
-
-
->>>>>>> 40d2944ea8bc2808f76beb1a26dd5a47566866ca
   if(is.null(iv)){
     mapping <- ggplot2::aes(.data[[x]], .data[[y]])
     r2 <- list(
@@ -96,7 +91,7 @@ linear_plot <- function(data, x, y, iv = NULL, log_y = NULL, log_x = NULL){
                            se = F)
     )
 
-<<<<<<< HEAD
+
 
   } else {
     mapping <- ggplot2::aes(.data[[x]], .data[[y]], color = .data[[iv]])
@@ -113,15 +108,10 @@ linear_plot <- function(data, x, y, iv = NULL, log_y = NULL, log_x = NULL){
                            linetype = "dashed",
                            se = F)
     )
-=======
+
     mapping <- ggplot2::aes(.data[[x]], .data[[y]])
     r2 <- Add_R2()
 
-  } else {
-
-    mapping <- ggplot2::aes(.data[[x]], .data[[y]], color = .data[[iv]])
-    r2 <- Add_R2()
->>>>>>> 40d2944ea8bc2808f76beb1a26dd5a47566866ca
   }
 
   if(!is.null(log_y)){
@@ -196,34 +186,30 @@ train.control <- caret::trainControl(method = "cv",
 # Train the model
 set.seed(136564)
 
-lasso_model <- switch(type,
+ffs_model <- switch(type,
                       'bf' = train(data[,2:7],
                                    data$mean_bf,
-                                   method = "glmnet",metric = "RMSE",
-                                   tuneGrid = expand.grid(alpha = seq(0.1,.9,by = 0.1),
-                                                          lambda = seq(0.001,0.1,by = 0.001)),
+                                   method = "glmStepAIC",
                                    trControl = train.control),
                       'ba' = train(data[,2:6],
                                    data$mean_bank_an,
-                                   method = "glmnet",metric = "RMSE",
-                                   tuneGrid = expand.grid(alpha = seq(0.1,.9,by = 0.1),
-                                                          lambda = seq(0.001,0.1,by = 0.001)),
+                                   method = "glmStepAIC",
                                    trControl = train.control
                       ),
                       'wd' = train(data[,2:7],
                                    data$mean_wd_2009,
-                                   method = "glmnet",metric = "RMSE",
-                                   tuneGrid = expand.grid(alpha = seq(0.1,.9,by = 0.1),
-                                                          lambda = seq(0.001,0.1,by = 0.001)),
-                                   trControl = train.control
+                                   method = "glmStepAIC",
+                                   trControl = train.control,
+                                   ffsParallel = TRUE,
+                                   minVar = 3
                       )
                     )
-lasso_model
+ffs_model
 }
 
 
 ## getting varImportance via stackoverlow answer https://stackoverflow.com/questions/63989057/discripencies-in-variable-importance-calculation-for-glmnet-model-in-r
-varImp <- function(object, lambda = NULL, ...) {
+varImp_elastic <- function(object, lambda = NULL, ...) {
   beta <- predict(object, s = lambda, type = "coef")
   if(is.list(beta)) {
     out <- do.call("cbind", lapply(beta, function(x) x[,1]))
