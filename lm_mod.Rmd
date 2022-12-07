@@ -7,18 +7,19 @@ editor_options:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(dev.args = list(png = list(type = "cairo")),fig.width = 10, fig.height = 5,
                       warning = FALSE, message = FALSE, error = FALSE)
-library(tidyverse)
+
 library(broom)
 library(broom.mixed)
-library(sf)
+library(performance)
 library(jtools)
-library(robustlmm)
 library(lme4)
-library(gtsummary)
 library(sjPlot)
-library(gt)
+library(car)
+library(tidyverse)
+
 source('R/functions.R')
 
+## some data cleaning
 gr_95_ts <- read_csv("data/gr_95_ts.csv")
 gr_95_ts <- gr_95_ts %>% rename(Site = "site_id", Year = "yr_change")
 ```
@@ -55,6 +56,15 @@ lmm_bf_simp_yr <- lmer(log(bf) ~
                  (Year|Site), 
                  control = lmerControl(optimizer = 'bobyqa'),
                gr_95_ts)
+
+# aa <- allFit(lmm_bf_simp_yr)
+# 
+# broom.mixed::glance(aa) %>% select(optimizer, AIC, NLL_rel) %>%  arrange(NLL_rel)
+# broom.mixed::tidy(aa, conf.int = TRUE) %>%  
+#   arrange(effect, term, estimate) %>%  
+#   select(-c(std.error, statistic)) %>% view()
+# 
+# aa_aug <- broom.mixed::augment(lmm_bf)
 
 # finding the chi square 
 anova(lmm_bf_simp_yr, lmm_bf_simp)
@@ -117,14 +127,15 @@ lmm_ba_simp_yr <- lmer(log(bank_angle)~
                  control = lmerControl(optimizer = 'bobyqa'),
                  gr_95_ts)
 
-aa <- allFit(lmm_ba_simp_yr)
-
-broom.mixed::glance(aa) %>% select(optimizer, AIC, NLL_rel) %>%  arrange(NLL_rel)
-broom.mixed::tidy(aa, conf.int = TRUE) %>%  
-  arrange(effect, term, estimate) %>%  
-  select(-c(std.error, statistic)) %>% view()
-
-aa_aug <- broom.mixed::augment(lmm_bf)
+#use allFit when convergence is not met; this will help find an optimizer
+# aa <- allFit(lmm_ba_simp_yr)
+# 
+# broom.mixed::glance(aa) %>% select(optimizer, AIC, NLL_rel) %>%  arrange(NLL_rel)
+# broom.mixed::tidy(aa, conf.int = TRUE) %>%  
+#   arrange(effect, term, estimate) %>%  
+#   select(-c(std.error, statistic)) %>% view()
+# 
+# aa_aug <- broom.mixed::augment(lmm_bf)
 
 
 summ(lmm_ba_simp_yr, confint = T, t.df = 'k-r')
@@ -184,14 +195,14 @@ lmm_wd_simp_yr <- lmer(log(wd_trans)~
                  wd_2009)
 
 
-aa <- allFit(lmm_wd_simp_yr)
-
-broom.mixed::glance(aa) %>% select(optimizer, AIC, NLL_rel) %>%  arrange(NLL_rel)
-broom.mixed::tidy(aa, conf.int = TRUE) %>%  
-  arrange(effect, term, estimate) %>%  
-  select(-c(std.error, statistic)) %>% view()
-
-aa_aug <- broom.mixed::augment(lmm_bf)
+# aa <- allFit(lmm_wd_simp_yr)
+# 
+# broom.mixed::glance(aa) %>% select(optimizer, AIC, NLL_rel) %>%  arrange(NLL_rel)
+# broom.mixed::tidy(aa, conf.int = TRUE) %>%  
+#   arrange(effect, term, estimate) %>%  
+#   select(-c(std.error, statistic)) %>% view()
+# 
+# aa_aug <- broom.mixed::augment(lmm_bf)
 
 
 summ(lmm_wd_simp_yr, confint = T, t.df = 'k-r')

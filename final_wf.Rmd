@@ -12,17 +12,29 @@ editor_options:
 knitr::opts_chunk$set(dev.args = list(png = list(type = "cairo")),fig.width = 10, fig.height = 5,
                       warning = FALSE, message = FALSE, error = FALSE)
 library(patchwork)
-library(tidyverse)
 library(GGally)
 library(car)
 library(broom)
-library(sf)
 library(performance)
-library(resourceviz)
 library(caret)
 library(CAST)
-library(glmnet)
+library(MASS)
+library(gtsummary)
+library(gt)
+library(patchwork)
+
+
+# MASS conflicts with tidyverse so make sure to run tidyverse after or use the conflicted package, e.g. conflicted::conflict_prefer('select', 'dplyr')
+library(tidyverse)
+
+#github package devtools::install_github('joshualerickson/resourceviz')
+# don't need but just nice for custom themes in plotting
+library(resourceviz)
+# don't need thematic but used for styling
+library(thematic)
 thematic::thematic_on(font = 'Montserrat')
+
+#source the functions
 source('R/functions.R')
 
 gr_95 <- read_csv('data/gr_95.csv')
@@ -455,8 +467,7 @@ mod_bf <- lm(log(mean_bf)~log(fac_taudem_17all_int)+
                MAP_UNIT_N +
                  mgmt, data = gr_95)
 car::Anova(mod_bf, type = 'III')
-library(gtsummary)
-library(gt)
+
 
 la <- list(`log(fac_taudem_17all_int)`~"log(FA Catchment Area)",
                `log(us_precip_1981_2010_cpg_all)`~"log(FA Average Annual Precipitation)",
@@ -679,8 +690,6 @@ m2 <- mgmt_diff_gg_area %>% mutate(
         axis.line.y = element_blank(),
         axis.ticks.y = element_blank()) +
   facet_wrap(~MAP_UNIT_N)
-
-library(patchwork)
 
 mgmt_diff_filt_ba <- emmeans::emmeans(mod_ba_filt, specs = 'mgmt')
 
