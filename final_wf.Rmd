@@ -217,32 +217,25 @@ managed area or reference; it just happens.
 
 ## Models
 
-We'll run the models for ANCOVA below for both dv's. We want the most parsimonous model so we'll use a mixture model (ridge and lasso aka elastic-net) to gain information about the simplest model; managing under-over fitting.
+We'll run the models for ANCOVA below for both dv's. We want the most parsimonious model but also a model that accounts for spatial autocorrelation effects within cross validation. We'll use a step glm AIC model and Ecological Sections as blocking folds to find the best features to use.
 
 ```{r}
+source('R/functions.R')
 
-lasso_model_bf <- feature_selection(gr_95, 'bf')
-plot(lasso_model_bf)
-var_imp_bf <- varImp(lasso_model_bf$finalModel, lasso_model_bf$bestTune$lambda)
-coef(lasso_model_bf$finalModel, lasso_model_bf$bestTune$lambda)
-plot(lasso_model_bf$finalModel, label = T)
-plot(lasso_model_bf$finalModel, label = T, xvar = c('lambda'))
+set.seed(2022)
+feature_selection_bf <- feature_selection(gr_95, 'bf')
 
-lasso_model_ba <- feature_selection(gr_95, 'ba')
-plot(lasso_model_ba)
-var_imp_ba <- varImp(lasso_model_ba$finalModel, lasso_model_ba$bestTune$lambda)
-coef(lasso_model_ba$finalModel, lasso_model_ba$bestTune$lambda)
-plot(lasso_model_bf$finalModel, label = T)
-plot(lasso_model_bf$finalModel, label = T, xvar = c('lambda'))
+set.seed(2022)
+feature_selection_ba <- feature_selection(gr_95, 'ba')
 
-lasso_model_wd <- feature_selection(gr_95, 'wd')
-plot(lasso_model_wd)
-var_imp_wd <- varImp(lasso_model_wd$finalModel, lasso_model_wd$bestTune$lambda)
-coef(lasso_model_wd$finalModel, lasso_model_wd$bestTune$lambda)
-plot(lasso_model_bf$finalModel, label = T)
-plot(lasso_model_bf$finalModel, label = T, xvar = c('lambda'))
+set.seed(2022)
+feature_selection_wd <- feature_selection(gr_95, 'wd')
+
 
 ```
+
+We stopped here and used the variables above for the linear mixed effects modeling in in `lm_mod.Rmd`. However, the following methods below follow a ANCOVA framework so if you want to continue you can.
+
 
 ## Residual assumptions
 
